@@ -208,7 +208,7 @@ X-GNOME-Autostart-enabled=true
             print("\n🔧 Configuração do Servidor")
             print("=" * 40)
             
-            server_url = input("URL do servidor (ex: http://servidor.com/worktrack/api): ").strip()
+            server_url = input("URL do servidor (ex: https://worktracksync.online/api): ").strip()
             
             if not server_url:
                 print("❌ URL do servidor é obrigatória")
