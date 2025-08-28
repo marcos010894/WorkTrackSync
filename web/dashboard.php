@@ -26,6 +26,7 @@ $currentUser = $auth->getCurrentUser();
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/chart-fix.css">
 </head>
 <body class="bg-gray-100">
     <!-- Sidebar -->

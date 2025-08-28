@@ -6,28 +6,11 @@ let currentSection = 'dashboard';
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
-    // Verificar e corrigir canvas problemáticos
-    fixCanvasSize();
-
     initializeDashboard();
     startAutoRefresh();
     updateCurrentTime();
     setInterval(updateCurrentTime, 1000);
 });
-
-function fixCanvasSize() {
-    // Corrigir canvas com altura excessiva
-    const canvasElements = document.querySelectorAll('canvas');
-    canvasElements.forEach(canvas => {
-        if (canvas.height > 400 || canvas.style.height === '23784px') {
-            console.warn(`Canvas ${canvas.id} com altura excessiva detectado: ${canvas.height}px, corrigindo...`);
-            canvas.height = 200;
-            canvas.style.height = '200px';
-            canvas.style.maxHeight = '200px';
-            canvas.width = canvas.parentElement.clientWidth || 600;
-        }
-    });
-}
 
 function initializeDashboard() {
     // Load initial data
