@@ -1,0 +1,8 @@
+{
+    "server_url": "http://localhost:8080/api",
+    "monitoring_interval": 300,
+    "heartbeat_interval": 60,
+    "enable_remote_commands": true,
+    "auto_start": true,
+    "log_level": "INFO"
+}
