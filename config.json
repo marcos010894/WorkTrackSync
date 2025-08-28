@@ -4,5 +4,5 @@
     "heartbeat_interval": 60,
     "enable_remote_commands": true,
     "auto_start": true,
-    "log_level": "DEBUG"
+    "log_level": "INFO"
 }

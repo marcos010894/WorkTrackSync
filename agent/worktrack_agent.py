@@ -1,4 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/import os
+import sys
+import json
+import time
+import hashlib
+import platform
+import threading
+import requests
+import psutil
 """
 WorkTrackSync Agent
 Sistema de monitoramento de tempo e atividades para computadores corporativos
@@ -260,13 +268,32 @@ class WorkTrackAgent:
                 'usage_minutes': self.calculate_usage_time()
             }
             
-            response = self.session.post(
-                f"{self.config['server_url']}/heartbeat.php",
-                json=data,
-                timeout=10
-            )
+            logger.debug(f"[DEBUG] Enviando heartbeat: {data}")
             
-            if response.status_code == 200:
+            heartbeat_url = f"{self.config['server_url']}/heartbeat.php"
+            logger.debug(f"[DEBUG] Heartbeat URL completa: {heartbeat_url}")
+            logger.debug(f"[DEBUG] Heartbeat Headers: {dict(self.session.headers)}")
+            
+            try:
+                response = self.session.post(
+                    heartbeat_url,
+                    json=data,
+                    timeout=10
+                )
+                
+                logger.debug(f"[DEBUG] Heartbeat Response Status: {response.status_code}")
+                logger.debug(f"[DEBUG] Heartbeat Response Headers: {dict(response.headers)}")
+                if response.status_code != 200:
+                    logger.debug(f"[DEBUG] Heartbeat Response Body: {response.text}")
+                    
+            except Exception as e:
+                logger.error(f"[DEBUG] Heartbeat Exception: {e}")
+                raise
+            
+            logger.debug(f"[DEBUG] Heartbeat URL: {self.config['server_url']}/heartbeat.php")
+            logger.debug(f"[DEBUG] Heartbeat Response: {response.status_code}")
+            
+            if response.status_code in [200, 201]:
                 logger.debug("Heartbeat enviado com sucesso")
                 return True
             else:
@@ -287,14 +314,18 @@ class WorkTrackAgent:
             system_info = self.get_system_info()
             system_info['computer_id'] = self.computer_id
             
+            logger.debug(f"[DEBUG] Enviando dados do sistema: {system_info}")
+            
             response = self.session.post(
                 f"{self.config['server_url']}/register.php",
                 json=system_info,
                 timeout=15
             )
             
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 logger.info("Informações do sistema enviadas com sucesso")
+                # Aguardar um pouco para garantir que o registro foi processado
+                time.sleep(1)
                 return True
             else:
                 logger.error(f"Erro ao registrar sistema: {response.status_code}")
@@ -329,7 +360,7 @@ class WorkTrackAgent:
                 timeout=15
             )
             
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 logger.debug("Dados de atividade enviados com sucesso")
                 return True
             else:
@@ -353,7 +384,7 @@ class WorkTrackAgent:
                 timeout=10
             )
             
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 commands = response.json()
                 for command in commands:
                     self.execute_remote_command(command)
@@ -463,7 +494,7 @@ class WorkTrackAgent:
                 timeout=10
             )
             
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 logger.info(f"Resultado do comando {command_id} reportado")
             else:
                 logger.error(f"Erro ao reportar resultado do comando: {response.status_code}")
@@ -508,10 +539,10 @@ class WorkTrackAgent:
             
             # Teste GET
             response = self.session.get(test_url, timeout=10)
-            if response.status_code == 200:
-                logger.info("✅ Conectividade GET OK")
+            if response.status_code in [200, 201]:
+                logger.info("[OK] Conectividade GET OK")
             else:
-                logger.warning(f"⚠️ Teste GET falhou: {response.status_code}")
+                logger.warning(f"[WARN] Teste GET falhou: {response.status_code}")
             
             # Teste POST
             test_data = {
@@ -522,11 +553,11 @@ class WorkTrackAgent:
             }
             
             response = self.session.post(test_url, json=test_data, timeout=10)
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 result = response.json()
-                logger.info("✅ Conectividade POST OK")
-                logger.info(f"🌐 Servidor: {result.get('message', 'Sem mensagem')}")
-                logger.info(f"🕒 Hora do servidor: {result.get('server_time', 'Desconhecida')}")
+                logger.info("[OK] Conectividade POST OK")
+                logger.info(f"[SERVER] Servidor: {result.get('message', 'Sem mensagem')}")
+                logger.info(f"[TIME] Hora do servidor: {result.get('server_time', 'Desconhecida')}")
                 logger.info(f"[LINK] CORS habilitado: {result.get('cors_enabled', False)}")
                 return True
             else:

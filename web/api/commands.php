@@ -18,7 +18,15 @@ try {
     $computerIdFromHeader = $_SERVER['HTTP_X_COMPUTER_ID'] ?? null;
     $computerIdFromParam = $_GET['computer_id'] ?? null;
     
-    $computerId = $computerIdFromHeader ?: $computerIdFromParam;
+    // Para POST, decodificar JSON e tentar pegar computer_id do body
+    $input = null;
+    $computerIdFromBody = null;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $computerIdFromBody = $input['computer_id'] ?? null;
+    }
+    
+    $computerId = $computerIdFromHeader ?: $computerIdFromParam ?: $computerIdFromBody;
     
     if (empty($computerId)) {
         Utils::jsonResponse(['error' => 'Computer ID obrigatório'], 400);
@@ -58,8 +66,7 @@ try {
         $auth = new Auth();
         $auth->requireLogin();
         
-        $input = json_decode(file_get_contents('php://input'), true);
-        
+        // Usar $input já decodificado anteriormente
         if (!$input || empty($input['command_type'])) {
             Utils::jsonResponse(['error' => 'Tipo de comando obrigatório'], 400);
         }
