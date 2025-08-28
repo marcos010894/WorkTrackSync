@@ -89,7 +89,7 @@ function startAutoRefresh() {
             }
             // Reiniciar verificação de status
             if (!statusCheckInterval) {
-                statusCheckInterval = setInterval(checkComputerStatus, 20000);
+                statusCheckInterval = setInterval(checkComputerStatus, 5000);
             }
         }
     });
@@ -106,6 +106,49 @@ function updateCurrentTime() {
     if (timeElement) {
         timeElement.textContent = timeString;
     }
+}
+
+// Activity loading function
+function loadActivity() {
+    console.log('Loading activity data...');
+    refreshActivity();
+
+    // Iniciar auto-refresh para atividade se ainda não estiver rodando
+    if (!activityRefreshInterval) {
+        activityRefreshInterval = setInterval(function() {
+            if (!document.hidden && currentSection === 'activity') {
+                refreshActivity();
+            }
+        }, 20000); // 20 segundos
+    }
+
+    // Iniciar timer visual
+    startActivityTimer();
+}
+
+function startActivityTimer() {
+    let seconds = 20;
+
+    const updateTimer = () => {
+        const timerElement = document.getElementById('activityTimer');
+        if (timerElement && currentSection === 'activity') {
+            timerElement.textContent = `(próxima atualização em ${seconds}s)`;
+            seconds--;
+
+            if (seconds < 0) {
+                seconds = 20;
+            }
+        }
+    };
+
+    // Parar timer anterior se existir
+    if (activityTimerInterval) {
+        clearInterval(activityTimerInterval);
+    }
+
+    // Iniciar novo timer
+    updateTimer();
+    activityTimerInterval = setInterval(updateTimer, 1000);
 }
 
 // Navigation
@@ -169,49 +212,6 @@ function showSection(sectionName) {
             loadSettings();
             break;
     }
-}
-
-// Activity loading function
-function loadActivity() {
-    console.log('Loading activity data...');
-    refreshActivity();
-
-    // Iniciar auto-refresh para atividade se ainda não estiver rodando
-    if (!activityRefreshInterval) {
-        activityRefreshInterval = setInterval(function() {
-            if (!document.hidden && currentSection === 'activity') {
-                refreshActivity();
-            }
-        }, 20000); // 20 segundos
-    }
-
-    // Iniciar timer visual
-    startActivityTimer();
-}
-
-function startActivityTimer() {
-    let seconds = 20;
-
-    const updateTimer = () => {
-        const timerElement = document.getElementById('activityTimer');
-        if (timerElement && currentSection === 'activity') {
-            timerElement.textContent = `(próxima atualização em ${seconds}s)`;
-            seconds--;
-
-            if (seconds < 0) {
-                seconds = 20;
-            }
-        }
-    };
-
-    // Parar timer anterior se existir
-    if (activityTimerInterval) {
-        clearInterval(activityTimerInterval);
-    }
-
-    // Iniciar novo timer
-    updateTimer();
-    activityTimerInterval = setInterval(updateTimer, 1000);
 }
 
 // Dashboard data loading - OTIMIZADO
@@ -990,37 +990,78 @@ function viewComputerDetails(computerId) {
     showNotification('Detalhes do computador em desenvolvimento', 'info');
 }
 
+// Settings functionality
+function loadSettings() {
+    console.log('Carregando configurações...');
+    // Implementação futura das configurações
+    showNotification('Seção de configurações em desenvolvimento', 'info');
+}
+
 // Verificação automática de status dos computadores
 
 // Inicializar verificação de status
 document.addEventListener('DOMContentLoaded', function() {
-    // Verificação inicial após 5 segundos
-    setTimeout(checkComputerStatus, 5000);
+    // Verificar sincronização de tempo
+    checkTimeSync();
     
-    // Verificação automática a cada 20 segundos
-    statusCheckInterval = setInterval(checkComputerStatus, 20000);
+    // Verificação inicial após 2 segundos
+    setTimeout(checkComputerStatus, 2000);
+    
+    // Verificação automática a cada 5 segundos
+    statusCheckInterval = setInterval(checkComputerStatus, 5000);
 });
+
+// Função para verificar sincronização de tempo
+async function checkTimeSync() {
+    try {
+        const response = await fetch('/api/time_check.php');
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            const clientTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+            console.log('🕐 Sincronização de tempo:', {
+                cliente: clientTime,
+                servidor_php: result.times.php_time,
+                servidor_db: result.times.db_time,
+                timezone: result.times.php_timezone
+            });
+        }
+    } catch (error) {
+        console.warn('Erro ao verificar tempo:', error);
+    }
+}
 
 // Função para verificar status dos computadores
 async function checkComputerStatus() {
     try {
-        console.log('Verificando status dos computadores...');
+        const now = new Date().toLocaleString('pt-BR');
+        console.log(`[${now}] Verificando status dos computadores...`);
+        
         const response = await fetch('/api/status_check.php');
         const result = await response.json();
         
         if (result.status === 'success') {
-            console.log('Status check completo:', result.stats);
+            const stats = result.stats;
+            console.log(`[${now}] Status check:`, {
+                total: stats.total_computers,
+                online: stats.online_computers, 
+                offline: stats.offline_computers,
+                marcados_offline: stats.computers_updated
+            });
+            
             // Atualizar estatísticas se algum computador foi marcado offline
-            if (result.stats.computers_updated > 0) {
-                console.log(`${result.stats.computers_updated} computadores marcados como offline`);
-                showNotification(`${result.stats.computers_updated} computadores marcados como offline`, 'warning');
+            if (stats.computers_updated > 0) {
+                console.warn(`${stats.computers_updated} computadores marcados como offline automaticamente`);
+                showNotification(`${stats.computers_updated} computadores ficaram offline`, 'warning');
                 
-                // Recarregar dados do dashboard
-                initializeDashboard();
+                // Recarregar dados do dashboard se estiver na seção correta
+                if (currentSection === 'dashboard' || currentSection === 'computers') {
+                    initializeDashboard();
+                }
             }
         }
     } catch (error) {
-        console.warn('Erro na verificação de status:', error);
+        console.error('Erro na verificação de status:', error);
     }
 }
 

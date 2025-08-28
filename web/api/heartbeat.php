@@ -24,6 +24,10 @@ try {
     
     $db = new Database();
     
+    // Debug: log do tempo atual
+    $current_time = date('Y-m-d H:i:s');
+    error_log("Heartbeat recebido de {$input['computer_id']} em {$current_time}");
+    
     // Atualizar último heartbeat
     $updated = $db->execute(
         "UPDATE computers SET 

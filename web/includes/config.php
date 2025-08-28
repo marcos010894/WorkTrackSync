@@ -26,6 +26,11 @@ class Database {
             ];
             
             $this->pdo = new PDO($dsn, $this->username, $this->password, $options);
+            
+            // Configurar timezone para o Brasil
+            $this->pdo->exec("SET time_zone = '-03:00'");
+            date_default_timezone_set('America/Sao_Paulo');
+            
         } catch (PDOException $e) {
             error_log("Database connection error: " . $e->getMessage());
             throw new Exception("Erro de conexão com o banco de dados");
