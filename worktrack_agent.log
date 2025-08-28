@@ -262,3 +262,5 @@
 2025-08-28 15:58:00,755 - INFO - WorkTrack Agent iniciado com sucesso
 2025-08-28 16:00:01,150 - INFO - Executando comando remoto: message
 2025-08-28 16:00:01,364 - INFO - Resultado do comando 1 reportado
+2025-08-28 16:34:48,758 - INFO - Parando WorkTrack Agent...
+2025-08-28 16:34:48,759 - INFO - WorkTrack Agent parado

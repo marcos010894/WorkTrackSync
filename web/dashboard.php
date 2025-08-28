@@ -213,14 +213,25 @@ $currentUser = $auth->getCurrentUser();
         <div id="section-activity" class="section p-6" style="display: none;">
             <div class="bg-white rounded-lg shadow">
                 <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 class="text-lg font-semibold text-gray-900">Atividade Atual dos Computadores</h3>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Atividade Atual dos Computadores</h3>
+                        <p class="text-sm text-gray-500">
+                            Atualização automática a cada 20 segundos
+                            <span id="activityTimer" class="ml-2 font-mono"></span>
+                        </p>
+                    </div>
                     <button onclick="refreshActivity()" class="btn-primary">
                         <i class="fas fa-sync-alt mr-2"></i>Atualizar
                     </button>
                 </div>
                 <div class="p-6">
                     <div id="activityData">
-                        <!-- Conteúdo carregado via AJAX -->
+                        <div class="text-center py-8">
+                            <p class="text-gray-600">Clique em "Atualizar" para carregar as atividades</p>
+                            <button onclick="refreshActivity()" class="mt-4 btn-primary">
+                                <i class="fas fa-sync-alt mr-2"></i>Carregar Atividades
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

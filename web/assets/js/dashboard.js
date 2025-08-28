@@ -2,6 +2,9 @@
 
 let charts = {};
 let refreshInterval;
+let activityRefreshInterval;
+let activityTimerInterval;
+let statusCheckInterval;
 let currentSection = 'dashboard';
 
 // Initialize dashboard
@@ -49,7 +52,14 @@ function startAutoRefresh() {
                 loadComputers();
             }
         }
-    }, 60000); // Aumentado para 60 segundos
+    }, 60000); // 60 segundos para dashboard e computadores
+
+    // Refresh específico para atividade atual - mais frequente
+    activityRefreshInterval = setInterval(function() {
+        if (!document.hidden && currentSection === 'activity') {
+            refreshActivity();
+        }
+    }, 20000); // 20 segundos para atividade atual
 
     // Pausar atualização quando aba não estiver visível
     document.addEventListener('visibilitychange', function() {
@@ -58,9 +68,28 @@ function startAutoRefresh() {
                 clearInterval(refreshInterval);
                 refreshInterval = null;
             }
+            if (activityRefreshInterval) {
+                clearInterval(activityRefreshInterval);
+                activityRefreshInterval = null;
+            }
+            if (activityTimerInterval) {
+                clearInterval(activityTimerInterval);
+                activityTimerInterval = null;
+            }
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
         } else {
             if (!refreshInterval) {
                 startAutoRefresh();
+            }
+            if (currentSection === 'activity') {
+                loadActivity(); // Recarregar atividade e iniciar timers
+            }
+            // Reiniciar verificação de status
+            if (!statusCheckInterval) {
+                statusCheckInterval = setInterval(checkComputerStatus, 20000);
             }
         }
     });
@@ -107,6 +136,19 @@ function showSection(sectionName) {
     };
 
     document.getElementById('pageTitle').textContent = titles[sectionName] || 'Dashboard';
+
+    // Parar refresh de atividade se sair da seção activity
+    if (currentSection === 'activity' && sectionName !== 'activity') {
+        if (activityRefreshInterval) {
+            clearInterval(activityRefreshInterval);
+            activityRefreshInterval = null;
+        }
+        if (activityTimerInterval) {
+            clearInterval(activityTimerInterval);
+            activityTimerInterval = null;
+        }
+    }
+
     currentSection = sectionName;
 
     // Load section-specific data
@@ -127,6 +169,49 @@ function showSection(sectionName) {
             loadSettings();
             break;
     }
+}
+
+// Activity loading function
+function loadActivity() {
+    console.log('Loading activity data...');
+    refreshActivity();
+
+    // Iniciar auto-refresh para atividade se ainda não estiver rodando
+    if (!activityRefreshInterval) {
+        activityRefreshInterval = setInterval(function() {
+            if (!document.hidden && currentSection === 'activity') {
+                refreshActivity();
+            }
+        }, 20000); // 20 segundos
+    }
+
+    // Iniciar timer visual
+    startActivityTimer();
+}
+
+function startActivityTimer() {
+    let seconds = 20;
+
+    const updateTimer = () => {
+        const timerElement = document.getElementById('activityTimer');
+        if (timerElement && currentSection === 'activity') {
+            timerElement.textContent = `(próxima atualização em ${seconds}s)`;
+            seconds--;
+
+            if (seconds < 0) {
+                seconds = 20;
+            }
+        }
+    };
+
+    // Parar timer anterior se existir
+    if (activityTimerInterval) {
+        clearInterval(activityTimerInterval);
+    }
+
+    // Iniciar novo timer
+    updateTimer();
+    activityTimerInterval = setInterval(updateTimer, 1000);
 }
 
 // Dashboard data loading - OTIMIZADO
@@ -906,24 +991,25 @@ function viewComputerDetails(computerId) {
 }
 
 // Verificação automática de status dos computadores
-let statusCheckInterval;
 
 // Inicializar verificação de status
 document.addEventListener('DOMContentLoaded', function() {
     // Verificação inicial após 5 segundos
     setTimeout(checkComputerStatus, 5000);
     
-    // Verificação automática a cada 2 minutos
-    statusCheckInterval = setInterval(checkComputerStatus, 120000);
+    // Verificação automática a cada 20 segundos
+    statusCheckInterval = setInterval(checkComputerStatus, 20000);
 });
 
 // Função para verificar status dos computadores
 async function checkComputerStatus() {
     try {
+        console.log('Verificando status dos computadores...');
         const response = await fetch('/api/status_check.php');
         const result = await response.json();
         
         if (result.status === 'success') {
+            console.log('Status check completo:', result.stats);
             // Atualizar estatísticas se algum computador foi marcado offline
             if (result.stats.computers_updated > 0) {
                 console.log(`${result.stats.computers_updated} computadores marcados como offline`);
@@ -940,13 +1026,34 @@ async function checkComputerStatus() {
 
 // Função para carregar e exibir atividade atual
 async function refreshActivity() {
+    console.log('refreshActivity() chamada');
+    
+    // Resetar timer visual
+    if (currentSection === 'activity') {
+        startActivityTimer();
+    }
+    
+    // Mostrar indicador de carregamento
+    const container = document.getElementById('activityData');
+    container.innerHTML = `
+        <div class="text-center py-8">
+            <i class="fas fa-spinner fa-spin text-2xl text-blue-600 mb-4"></i>
+            <p class="text-gray-600">Carregando atividades...</p>
+        </div>
+    `;
+    
     try {
         const response = await fetch('/api/current_activity.php');
+        console.log('Response status:', response.status);
+        
         const result = await response.json();
+        console.log('Result received:', result);
         
         if (result.status === 'success') {
+            console.log('Calling displayActivityData with:', result.data);
             displayActivityData(result.data);
         } else {
+            console.error('API returned error:', result.message);
             document.getElementById('activityData').innerHTML = 
                 '<div class="text-center text-red-600">Erro ao carregar atividade atual</div>';
         }
@@ -958,14 +1065,32 @@ async function refreshActivity() {
 }
 
 function displayActivityData(computers) {
+    console.log('displayActivityData() chamada com:', computers);
     const container = document.getElementById('activityData');
+    console.log('Container element:', container);
     
     if (!computers || computers.length === 0) {
-        container.innerHTML = '<div class="text-center text-gray-500">Nenhum computador online no momento</div>';
+        console.log('Nenhum computador encontrado');
+        container.innerHTML = `
+            <div class="text-center text-gray-500 py-8">
+                <i class="fas fa-desktop text-4xl mb-4"></i>
+                <h4 class="text-lg font-medium mb-2">Nenhum computador online</h4>
+                <p>Para ver atividades em tempo real, certifique-se de que:</p>
+                <ul class="text-left mt-4 space-y-2 max-w-md mx-auto">
+                    <li>• O agent está rodando nos computadores</li>
+                    <li>• Os computadores estão enviando dados</li>
+                    <li>• A conexão com a internet está funcionando</li>
+                </ul>
+                <button onclick="refreshActivity()" class="mt-4 btn-primary">
+                    <i class="fas fa-sync-alt mr-2"></i>Verificar Novamente
+                </button>
+            </div>
+        `;
         return;
     }
     
     let html = '';
+    console.log('Processando', computers.length, 'computadores');
     
     computers.forEach(computer => {
         const activeWindow = computer.active_window;
@@ -1022,7 +1147,9 @@ function displayActivityData(computers) {
         `;
     });
     
+    console.log('HTML gerado:', html.length, 'caracteres');
     container.innerHTML = html;
+    console.log('Container innerHTML definido');
 }
 
 function timeAgo(dateString) {
