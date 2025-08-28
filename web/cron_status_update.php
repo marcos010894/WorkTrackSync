@@ -9,13 +9,14 @@ require_once 'includes/config.php';
 try {
     $db = new Database();
     
-    // Marcar computadores como offline se não enviaram heartbeat há mais de 2 minutos
+    // Marcar computadores como offline se não enviaram heartbeat há mais de 90 segundos
+    // (heartbeat é a cada 60s, então 90s detecta rapidamente desconexões)
     $updated = $db->execute(
         "UPDATE computers SET 
             is_online = 0,
             updated_at = NOW()
          WHERE is_online = 1 
-         AND last_activity < DATE_SUB(NOW(), INTERVAL 2 MINUTE)"
+         AND last_activity < DATE_SUB(NOW(), INTERVAL 90 SECOND)"
     );
     
     if ($updated > 0) {

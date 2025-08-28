@@ -904,3 +904,36 @@ function formatTime(timeString) {
 function viewComputerDetails(computerId) {
     showNotification('Detalhes do computador em desenvolvimento', 'info');
 }
+
+// Verificação automática de status dos computadores
+let statusCheckInterval;
+
+// Inicializar verificação de status
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificação inicial após 5 segundos
+    setTimeout(checkComputerStatus, 5000);
+    
+    // Verificação automática a cada 2 minutos
+    statusCheckInterval = setInterval(checkComputerStatus, 120000);
+});
+
+// Função para verificar status dos computadores
+async function checkComputerStatus() {
+    try {
+        const response = await fetch('/api/status_check.php');
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            // Atualizar estatísticas se algum computador foi marcado offline
+            if (result.stats.computers_updated > 0) {
+                console.log(`${result.stats.computers_updated} computadores marcados como offline`);
+                showNotification(`${result.stats.computers_updated} computadores marcados como offline`, 'warning');
+                
+                // Recarregar dados do dashboard
+                initializeDashboard();
+            }
+        }
+    } catch (error) {
+        console.warn('Erro na verificação de status:', error);
+    }
+}
