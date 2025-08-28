@@ -45,7 +45,7 @@ def test_api_endpoint(base_url, endpoint, method='GET', data=None):
         
         return response.status_code == 200
         
-    except requests.exceptions.ConnectException:
+    except requests.exceptions.ConnectionError:
         print(f"   ❌ Erro de conexão")
         return False
     except requests.exceptions.Timeout:
@@ -58,7 +58,7 @@ def test_api_endpoint(base_url, endpoint, method='GET', data=None):
 def main():
     if len(sys.argv) != 2:
         print("Uso: python test_cors.py <URL_DO_SERVIDOR>")
-        print("Exemplo: python test_cors.py http://localhost:8080")
+        print("Exemplo: python test_cors.py https://worktracksync.online/")
         sys.exit(1)
     
     base_url = sys.argv[1].rstrip('/')

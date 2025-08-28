@@ -1,0 +1,6 @@
+2025-08-28 14:17:16,340 - ERROR - Erro ao carregar configurações: stat: path should be string, bytes, os.PathLike or integer, not dict
+2025-08-28 14:17:16,346 - INFO - WorkTrack Agent iniciado - Computer ID: 8471FEAB39C06F08
+2025-08-28 14:19:03,886 - ERROR - Erro ao carregar configurações: stat: path should be string, bytes, os.PathLike or integer, not dict
+2025-08-28 14:19:03,892 - INFO - WorkTrack Agent iniciado - Computer ID: 8471FEAB39C06F08
+2025-08-28 14:19:10,011 - ERROR - Erro ao carregar configurações: stat: path should be string, bytes, os.PathLike or integer, not dict
+2025-08-28 14:19:10,015 - INFO - WorkTrack Agent iniciado - Computer ID: 8471FEAB39C06F08

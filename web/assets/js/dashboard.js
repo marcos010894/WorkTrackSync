@@ -1,5 +1,45 @@
 // WorkTrack Dashboard JavaScript
 
+// Sistema de cache com expiração e controle de duplicatas
+const dashboardCache = {
+    data: new Map(),
+    
+    set(key, value, duration = 30000) {
+        this.data.set(key, {
+             }
+    } finally {
+        // Remover da lista de requisições ativas
+        activeRequests.delete(cacheKey);
+    }
+}
+
+function updateDashboardWithData(data) {e: value,
+            timestamp: Date.now(),
+            duration: duration
+        });
+    },
+    
+    get(key) {
+        const item = this.data.get(key);
+        if (!item) return null;
+        
+        const now = Date.now();
+        if ((now - item.timestamp) > item.duration) {
+            this.data.delete(key);
+            return null;
+        }
+        
+        return item.value;
+    },
+    
+    clear() {
+        this.data.clear();
+    }
+};
+
+// Controle de requisições ativas
+const activeRequests = new Set();
+
 let charts = {};
 let refreshInterval;
 let currentSection = 'dashboard';
@@ -22,14 +62,40 @@ function initializeDashboard() {
 }
 
 function startAutoRefresh() {
-    // Refresh data every 30 seconds
+    // Limpar intervalo anterior se existir
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    
+    // Refresh otimizado - menos frequente para evitar travamentos
     refreshInterval = setInterval(function() {
-        if (currentSection === 'dashboard') {
-            loadDashboardData();
-        } else if (currentSection === 'computers') {
-            loadComputers();
+        // Só atualizar se a aba estiver visível e não estiver fazendo requisição
+        if (!document.hidden && !window.isLoading) {
+            if (currentSection === 'dashboard') {
+                loadDashboardData();
+            } else if (currentSection === 'computers') {
+                loadComputers();
+            }
         }
-    }, 30000);
+    }, 60000); // 60 segundos
+
+    // Pausar atualização quando aba não estiver visível (uma vez só)
+    if (!window.visibilityListenerAdded) {
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+            } else {
+                if (!refreshInterval) {
+                    startAutoRefresh();
+                }
+            }
+        });
+        window.visibilityListenerAdded = true;
+    }
 }
 
 function updateCurrentTime() {
@@ -95,20 +161,88 @@ function showSection(sectionName) {
     }
 }
 
-// Dashboard data loading
+// Dashboard data loading - OTIMIZADO
+let dashboardDataCache = null;
+let lastDataLoad = 0;
+const CACHE_DURATION = 30000; // 30 segundos
+
 async function loadDashboardData() {
+    const cacheKey = 'dashboard_data';
+    
+    // Verificar se já há uma requisição em andamento
+    if (activeRequests.has(cacheKey)) {
+        console.log('Requisição de dashboard já em andamento, aguardando...');
+        return;
+    }
+    
+    // Verificar cache
+    const cachedData = dashboardCache.get(cacheKey);
+    if (cachedData) {
+        updateDashboardWithData(cachedData);
+        return;
+    }
+
     try {
-        const response = await fetch('api/dashboard_data.php');
+        // Marcar requisição como ativa
+        activeRequests.add(cacheKey);
+        
+        // Adicionar timeout para evitar travamentos
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
+
+        const response = await fetch('api/dashboard_data.php', {
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
         const data = await response.json();
 
         if (data.success) {
-            updateDashboardStats(data.stats);
-            updateRecentActivity(data.recent_activity);
-            updateCharts(data.charts);
+            // Salvar no cache por 30 segundos
+            dashboardCache.set(cacheKey, data, 30000);
+            updateDashboardWithData(data);
+        } else {
+            console.error('API returned error:', data.error);
+            showErrorMessage('Erro ao carregar dados do dashboard');
         }
     } catch (error) {
         console.error('Error loading dashboard data:', error);
+        
+        if (error.name === 'AbortError') {
+            showErrorMessage('Timeout na conexão - tente novamente');
+        } else {
+            showErrorMessage('Erro de conexão - tentando novamente...');
+            
+            // Tentar novamente em 5 segundos se for erro de rede
+            setTimeout(() => {
+                if (!document.hidden) {
+                    loadDashboardData();
+                }
+            }, 5000);
+        }
+    } finally {
+        // Remover da lista de requisições ativas
+        activeRequests.delete(cacheKey);
     }
+            setTimeout(loadDashboardData, 5000);
+        }
+    }
+}
+
+function updateDashboardWithData(data) {
+    updateDashboardStats(data.stats);
+    updateRecentActivity(data.recent_activity);
+    updateCharts(data.charts);
+}
+
+function showErrorMessage(message) {
+    // Mostrar erro na interface se necessário
+    console.warn(message);
 }
 
 function updateDashboardStats(stats) {
@@ -227,85 +361,157 @@ function initializeCharts() {
 }
 
 function updateCharts(chartData) {
-    if (chartData.usage && charts.usage) {
-        charts.usage.data.labels = chartData.usage.labels;
-        charts.usage.data.datasets[0].data = chartData.usage.data;
-        charts.usage.update();
-    }
+    try {
+        // Atualizar gráfico de uso com verificação de segurança
+        if (chartData.usage && charts.usage && chartData.usage.labels && chartData.usage.data) {
+            // Limitar dados para evitar travamentos
+            const maxDataPoints = 7;
+            const labels = chartData.usage.labels.slice(-maxDataPoints);
+            const data = chartData.usage.data.slice(-maxDataPoints);
 
-    if (chartData.status && charts.status) {
-        charts.status.data.datasets[0].data = chartData.status.data;
-        charts.status.update();
+            charts.usage.data.labels = labels;
+            charts.usage.data.datasets[0].data = data;
+            charts.usage.update('none'); // Atualização sem animação para performance
+        }
+
+        // Atualizar gráfico de status com verificação de segurança
+        if (chartData.status && charts.status && chartData.status.data) {
+            charts.status.data.datasets[0].data = chartData.status.data;
+            charts.status.update('none'); // Atualização sem animação para performance
+        }
+    } catch (error) {
+        console.error('Erro ao atualizar gráficos:', error);
     }
 }
 
-// Computer management
+// Computer management - OTIMIZADO
+let isLoadingComputers = false;
+
 async function loadComputers() {
+    // Evitar múltiplas requisições simultâneas
+    if (isLoadingComputers) {
+        return;
+    }
+    
+    isLoadingComputers = true;
+    
     try {
-        const response = await fetch('api/computers.php');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
+        
+        const response = await fetch('api/computers.php', {
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
 
         if (data.success) {
             updateComputersTable(data.computers);
+        } else {
+            console.error('API returned error:', data.error);
         }
     } catch (error) {
         console.error('Error loading computers:', error);
+    } finally {
+        isLoadingComputers = false;
     }
 }
 
 function updateComputersTable(computers) {
     const tbody = document.getElementById('computersTable');
+    
+    if (!tbody) {
+        console.error('Tabela de computadores não encontrada');
+        return;
+    }
 
-    if (computers.length === 0) {
+    if (!computers || computers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">Nenhum computador encontrado</td></tr>';
         return;
     }
 
-    const rows = computers.map(computer => `
-        <tr class="hover:bg-gray-50">
-            <td class="table-cell">
-                <div class="flex items-center">
-                    <i class="fas fa-desktop mr-2 text-gray-400"></i>
-                    <div>
-                        <div class="font-medium">${computer.computer_name}</div>
-                        <div class="text-gray-500 text-xs">${computer.os_info}</div>
-                    </div>
-                </div>
-            </td>
-            <td class="table-cell">
-                <div class="flex items-center">
-                    <i class="fas fa-user mr-2 text-gray-400"></i>
-                    ${computer.user_name}
-                </div>
-            </td>
-            <td class="table-cell">
-                <span class="status-${computer.is_online ? 'online' : 'offline'}">
-                    <i class="fas fa-circle mr-1 text-xs"></i>
-                    ${computer.is_online ? 'Online' : 'Offline'}
-                </span>
-            </td>
-            <td class="table-cell">
-                <span class="text-gray-900">${computer.last_activity_formatted}</span>
-            </td>
-            <td class="table-cell">
-                <span class="font-medium">${computer.usage_today}</span>
-            </td>
-            <td class="table-cell">
-                <div class="flex space-x-2">
-                    ${computer.is_online ? `
-                        <button onclick="openCommandModal('${computer.computer_id}')" class="btn-warning" title="Enviar Comando">
-                            <i class="fas fa-terminal"></i>
-                        </button>
-                    ` : ''}
-                    <button onclick="viewComputerDetails('${computer.computer_id}')" class="btn-info" title="Detalhes">
-                        <i class="fas fa-info"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    // Limitar o número de computadores para evitar travamento
+    const limitedComputers = computers.slice(0, 50); // Máximo 50 computadores
     
-    tbody.innerHTML = rows;
+    try {
+        const rows = limitedComputers.map(computer => {
+            // Sanitizar dados para evitar problemas
+            const computerName = String(computer.computer_name || 'Desconhecido').replace(/[<>"']/g, '');
+            const userName = String(computer.user_name || 'Desconhecido').replace(/[<>"']/g, '');
+            const computerId = String(computer.computer_id || '').replace(/[<>"']/g, '');
+            const osInfo = String(computer.os_info || '').replace(/[<>"']/g, '');
+            const lastActivity = String(computer.last_activity_formatted || 'Nunca').replace(/[<>"']/g, '');
+            const usageToday = String(computer.usage_today || '0m').replace(/[<>"']/g, '');
+            
+            return `
+                <tr class="hover:bg-gray-50">
+                    <td class="table-cell">
+                        <div class="flex items-center">
+                            <i class="fas fa-desktop mr-2 text-gray-400"></i>
+                            <div>
+                                <div class="font-medium">${computerName}</div>
+                                <div class="text-gray-500 text-xs">${osInfo}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="table-cell">
+                        <div class="flex items-center">
+                            <i class="fas fa-user mr-2 text-gray-400"></i>
+                            ${userName}
+                        </div>
+                    </td>
+                    <td class="table-cell">
+                        <span class="status-${computer.is_online ? 'online' : 'offline'}">
+                            <i class="fas fa-circle mr-1 text-xs"></i>
+                            ${computer.is_online ? 'Online' : 'Offline'}
+                        </span>
+                    </td>
+                    <td class="table-cell">
+                        <span class="text-gray-900">${lastActivity}</span>
+                    </td>
+                    <td class="table-cell">
+                        <span class="font-medium">${usageToday}</span>
+                    </td>
+                    <td class="table-cell">
+                        <div class="flex space-x-2">
+                            ${computer.is_online && computerId ? `
+                                <button onclick="openCommandModal('${computerId}')" class="btn-warning" title="Enviar Comando">
+                                    <i class="fas fa-terminal"></i>
+                                </button>
+                            ` : ''}
+                            ${computerId ? `
+                                <button onclick="viewComputerDetails('${computerId}')" class="btn-info" title="Detalhes">
+                                    <i class="fas fa-info"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Atualizar conteúdo usando DocumentFragment para melhor performance
+        const fragment = document.createDocumentFragment();
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = rows;
+        
+        while (tempDiv.firstChild) {
+            fragment.appendChild(tempDiv.firstChild);
+        }
+        
+        tbody.innerHTML = '';
+        tbody.appendChild(fragment);
+        
+    } catch (error) {
+        console.error('Erro ao atualizar tabela:', error);
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-red-500">Erro ao carregar dados</td></tr>';
+    }
 }
 
 function filterComputers() {

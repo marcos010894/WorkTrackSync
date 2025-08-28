@@ -261,6 +261,10 @@ class WorkTrackAgent:
             else:
                 logger.error(f"Erro no heartbeat: {response.status_code}")
                 
+        except requests.exceptions.ConnectionError:
+            logger.error("Erro de conexão ao enviar heartbeat")
+        except requests.exceptions.Timeout:
+            logger.error("Timeout ao enviar heartbeat")
         except Exception as e:
             logger.error(f"Erro ao enviar heartbeat: {e}")
         
@@ -284,6 +288,10 @@ class WorkTrackAgent:
             else:
                 logger.error(f"Erro ao registrar sistema: {response.status_code}")
                 
+        except requests.exceptions.ConnectionError:
+            logger.error("Erro de conexão ao enviar informações do sistema")
+        except requests.exceptions.Timeout:
+            logger.error("Timeout ao enviar informações do sistema")
         except Exception as e:
             logger.error(f"Erro ao enviar informações do sistema: {e}")
         
@@ -316,6 +324,10 @@ class WorkTrackAgent:
             else:
                 logger.error(f"Erro ao enviar dados de atividade: {response.status_code}")
                 
+        except requests.exceptions.ConnectionError:
+            logger.error("Erro de conexão ao enviar dados de atividade")
+        except requests.exceptions.Timeout:
+            logger.error("Timeout ao enviar dados de atividade")
         except Exception as e:
             logger.error(f"Erro ao enviar dados de atividade: {e}")
         
@@ -335,6 +347,10 @@ class WorkTrackAgent:
                 for command in commands:
                     self.execute_remote_command(command)
                     
+        except requests.exceptions.ConnectionError:
+            logger.debug("Erro de conexão ao verificar comandos remotos (normal quando offline)")
+        except requests.exceptions.Timeout:
+            logger.debug("Timeout ao verificar comandos remotos")
         except Exception as e:
             logger.error(f"Erro ao verificar comandos remotos: {e}")
 
@@ -374,7 +390,7 @@ class WorkTrackAgent:
             if platform.system() == "Windows":
                 os.system("rundll32.exe user32.dll,LockWorkStation")
             elif platform.system() == "Darwin":  # macOS
-                os.system("/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend")
+                os.system(r"/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend")
             elif platform.system() == "Linux":
                 os.system("gnome-screensaver-command -l || xdg-screensaver lock")
             
@@ -441,6 +457,10 @@ class WorkTrackAgent:
             else:
                 logger.error(f"Erro ao reportar resultado do comando: {response.status_code}")
                 
+        except requests.exceptions.ConnectionError:
+            logger.debug("Erro de conexão ao reportar resultado do comando")
+        except requests.exceptions.Timeout:
+            logger.debug("Timeout ao reportar resultado do comando")
         except Exception as e:
             logger.error(f"Erro ao reportar resultado do comando: {e}")
 
@@ -502,7 +522,7 @@ class WorkTrackAgent:
                 logger.error(f"❌ Teste POST falhou: {response.status_code}")
                 return False
                 
-        except requests.exceptions.ConnectException:
+        except requests.exceptions.ConnectionError:
             logger.error("❌ Não foi possível conectar ao servidor")
             logger.error(f"🔗 URL: {self.config['server_url']}")
             logger.error("💡 Verifique se o servidor está rodando e a URL está correta")

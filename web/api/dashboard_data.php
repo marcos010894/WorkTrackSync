@@ -28,7 +28,7 @@ try {
         'total_usage_today' => Utils::formatTime($db->fetchOne("SELECT COALESCE(SUM(total_minutes), 0) as total FROM daily_sessions WHERE session_date = CURDATE()")['total'])
     ];
     
-    // Atividades recentes
+    // Atividades recentes - OTIMIZADO com LIMIT e INDEX
     $recentActivity = $db->fetchAll(
         "SELECT 
             al.activity_type,
@@ -38,8 +38,9 @@ try {
             al.activity_data
          FROM activity_logs al
          JOIN computers c ON al.computer_id = c.computer_id
+         WHERE al.timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
          ORDER BY al.timestamp DESC
-         LIMIT 10"
+         LIMIT 5"
     );
     
     $formattedActivity = array_map(function($activity) {
@@ -51,39 +52,36 @@ try {
         ];
     }, $recentActivity);
     
-    // Dados para gráficos
+    // Dados para gráficos - OTIMIZADO
     
-    // Gráfico de uso (últimos 7 dias)
-    $usageData = $db->fetchAll(
-        "SELECT 
-            session_date,
-            SUM(total_minutes) / 60 as total_hours
-         FROM daily_sessions 
-         WHERE session_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-         GROUP BY session_date
-         ORDER BY session_date"
-    );
+    // Gráfico de uso (últimos 7 dias) - uma única consulta
+    $usageQuery = "
+        SELECT 
+            DATE(session_date) as date,
+            COALESCE(SUM(total_minutes), 0) / 60 as total_hours
+        FROM daily_sessions 
+        WHERE session_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        GROUP BY DATE(session_date)
+        ORDER BY session_date
+    ";
     
+    $usageData = $db->fetchAll($usageQuery);
+    
+    // Criar array com dados dos últimos 7 dias
     $usageLabels = [];
     $usageValues = [];
+    $dataMap = [];
     
-    // Preencher dados dos últimos 7 dias
+    // Mapear dados existentes
+    foreach ($usageData as $row) {
+        $dataMap[$row['date']] = floatval($row['total_hours']);
+    }
+    
+    // Preencher últimos 7 dias
     for ($i = 6; $i >= 0; $i--) {
         $date = date('Y-m-d', strtotime("-$i days"));
         $usageLabels[] = date('d/m', strtotime($date));
-        
-        $found = false;
-        foreach ($usageData as $usage) {
-            if ($usage['session_date'] === $date) {
-                $usageValues[] = round($usage['total_hours'], 1);
-                $found = true;
-                break;
-            }
-        }
-        
-        if (!$found) {
-            $usageValues[] = 0;
-        }
+        $usageValues[] = isset($dataMap[$date]) ? round($dataMap[$date], 1) : 0;
     }
     
     // Gráfico de status
