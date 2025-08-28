@@ -44,6 +44,9 @@ $currentUser = $auth->getCurrentUser();
             <a href="#computers" class="nav-item" onclick="showSection('computers')">
                 <i class="fas fa-desktop mr-3"></i>Computadores
             </a>
+            <a href="#activity" class="nav-item" onclick="showSection('activity')">
+                <i class="fas fa-eye mr-3"></i>Atividade Atual
+            </a>
             <a href="#reports" class="nav-item" onclick="showSection('reports')">
                 <i class="fas fa-file-alt mr-3"></i>Relatórios
             </a>
@@ -201,6 +204,23 @@ $currentUser = $auth->getCurrentUser();
                                 <!-- Conteúdo carregado via AJAX -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Section -->
+        <div id="section-activity" class="section p-6" style="display: none;">
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-900">Atividade Atual dos Computadores</h3>
+                    <button onclick="refreshActivity()" class="btn-primary">
+                        <i class="fas fa-sync-alt mr-2"></i>Atualizar
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div id="activityData">
+                        <!-- Conteúdo carregado via AJAX -->
                     </div>
                 </div>
             </div>

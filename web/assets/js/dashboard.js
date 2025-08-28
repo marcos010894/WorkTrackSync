@@ -937,3 +937,104 @@ async function checkComputerStatus() {
         console.warn('Erro na verificação de status:', error);
     }
 }
+
+// Função para carregar e exibir atividade atual
+async function refreshActivity() {
+    try {
+        const response = await fetch('/api/current_activity.php');
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            displayActivityData(result.data);
+        } else {
+            document.getElementById('activityData').innerHTML = 
+                '<div class="text-center text-red-600">Erro ao carregar atividade atual</div>';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar atividade:', error);
+        document.getElementById('activityData').innerHTML = 
+            '<div class="text-center text-red-600">Erro de conexão</div>';
+    }
+}
+
+function displayActivityData(computers) {
+    const container = document.getElementById('activityData');
+    
+    if (!computers || computers.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-500">Nenhum computador online no momento</div>';
+        return;
+    }
+    
+    let html = '';
+    
+    computers.forEach(computer => {
+        const activeWindow = computer.active_window;
+        const programsList = computer.running_programs.slice(0, 5); // Mostrar apenas 5 programas
+        
+        html += `
+            <div class="mb-6 p-4 border border-gray-200 rounded-lg">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h4 class="font-semibold text-lg">${computer.computer_name}</h4>
+                        <p class="text-sm text-gray-600">Usuário: ${computer.user_name}</p>
+                    </div>
+                    <div class="text-right">
+                        <div class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <i class="fas fa-circle mr-1"></i>Online
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Última atividade: ${timeAgo(computer.last_activity)}</p>
+                    </div>
+                </div>
+                
+                ${activeWindow ? `
+                    <div class="mb-3 p-3 bg-blue-50 rounded-lg">
+                        <h5 class="font-medium text-blue-900 mb-1">
+                            <i class="fas fa-window-maximize mr-2"></i>Janela Ativa
+                        </h5>
+                        <p class="text-blue-800">
+                            <strong>${activeWindow.program_name}</strong>
+                            ${activeWindow.window_title && activeWindow.window_title !== activeWindow.program_name 
+                                ? ` - ${activeWindow.window_title}` : ''}
+                        </p>
+                    </div>
+                ` : ''}
+                
+                <div>
+                    <h5 class="font-medium text-gray-900 mb-2">
+                        <i class="fas fa-list mr-2"></i>Programas em Execução (${computer.total_programs})
+                    </h5>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        ${programsList.map(program => `
+                            <div class="p-2 bg-gray-50 rounded text-sm">
+                                <div class="font-medium">${program.program_name}</div>
+                                ${program.window_title && program.window_title !== program.program_name 
+                                    ? `<div class="text-gray-600 text-xs">${program.window_title}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${computer.total_programs > 5 ? `
+                        <p class="text-sm text-gray-500 mt-2">
+                            ... e mais ${computer.total_programs - 5} programas
+                        </p>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function timeAgo(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'agora';
+    if (diffMins < 60) return `${diffMins}m atrás`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h atrás`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d atrás`;
+}

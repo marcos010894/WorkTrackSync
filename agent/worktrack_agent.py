@@ -202,27 +202,39 @@ class WorkTrackAgent:
     def _get_active_window_macos(self) -> Optional[Dict[str, Any]]:
         """Obtém janela ativa no macOS"""
         try:
+            # Script melhorado para capturar mais informações
             script = '''
             tell application "System Events"
                 set frontApp to first application process whose frontmost is true
                 set appName to name of frontApp
+                set bundleId to ""
+                try
+                    set bundleId to bundle identifier of frontApp
+                on error
+                    set bundleId to appName
+                end try
                 try
                     set windowTitle to name of first window of frontApp
                 on error
                     set windowTitle to appName
                 end try
             end tell
-            return appName & "|" & windowTitle
+            return appName & "|" & windowTitle & "|" & bundleId
             '''
-            result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+            result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 parts = result.stdout.strip().split('|')
                 if len(parts) >= 2:
-                    return {
+                    active_window = {
                         'program_name': parts[0],
                         'window_title': parts[1],
-                        'program_path': parts[0]
+                        'bundle_id': parts[2] if len(parts) > 2 else parts[0],
+                        'timestamp': datetime.now().isoformat()
                     }
+                    logger.debug(f"Janela ativa capturada: {active_window['program_name']} - {active_window['window_title']}")
+                    return active_window
+        except subprocess.TimeoutExpired:
+            logger.warning("Timeout ao capturar janela ativa (macOS)")
         except Exception as e:
             logger.error(f"Erro ao obter janela ativa (macOS): {e}")
         return None
@@ -345,6 +357,12 @@ class WorkTrackAgent:
             programs = self.get_running_programs()
             active_window = self.get_active_window_info()
             
+            # Log da janela ativa capturada
+            if active_window:
+                logger.info(f"Programa ativo: {active_window.get('program_name')} - {active_window.get('window_title')}")
+            else:
+                logger.warning("Nenhuma janela ativa capturada")
+            
             data = {
                 'computer_id': self.computer_id,
                 'timestamp': datetime.now().isoformat(),
@@ -354,6 +372,8 @@ class WorkTrackAgent:
                 'active_window': active_window
             }
             
+            logger.info(f"Enviando dados de atividade: {len(programs)} programas rodando")
+            
             response = self.session.post(
                 f"{self.config['server_url']}/activity.php",
                 json=data,
@@ -361,7 +381,7 @@ class WorkTrackAgent:
             )
             
             if response.status_code in [200, 201]:
-                logger.debug("Dados de atividade enviados com sucesso")
+                logger.info("Dados de atividade enviados com sucesso")
                 return True
             else:
                 logger.error(f"Erro ao enviar dados de atividade: {response.status_code}")
