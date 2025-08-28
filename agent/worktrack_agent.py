@@ -467,9 +467,62 @@ class WorkTrackAgent:
                 logger.error(f"Erro no worker de monitoramento: {e}")
                 time.sleep(self.config['monitoring_interval'])
 
+    def test_server_connectivity(self) -> bool:
+        """Testa conectividade com o servidor"""
+        try:
+            logger.info("Testando conectividade com o servidor...")
+            
+            # Testar API de teste
+            test_url = f"{self.config['server_url']}/api/test.php"
+            
+            # Teste GET
+            response = self.session.get(test_url, timeout=10)
+            if response.status_code == 200:
+                logger.info("✅ Conectividade GET OK")
+            else:
+                logger.warning(f"⚠️ Teste GET falhou: {response.status_code}")
+            
+            # Teste POST
+            test_data = {
+                'test': True,
+                'computer_id': self.computer_id,
+                'timestamp': datetime.now().isoformat(),
+                'message': 'Teste de conectividade'
+            }
+            
+            response = self.session.post(test_url, json=test_data, timeout=10)
+            if response.status_code == 200:
+                result = response.json()
+                logger.info("✅ Conectividade POST OK")
+                logger.info(f"🌐 Servidor: {result.get('message', 'Sem mensagem')}")
+                logger.info(f"🕒 Hora do servidor: {result.get('server_time', 'Desconhecida')}")
+                logger.info(f"🔗 CORS habilitado: {result.get('cors_enabled', False)}")
+                return True
+            else:
+                logger.error(f"❌ Teste POST falhou: {response.status_code}")
+                return False
+                
+        except requests.exceptions.ConnectException:
+            logger.error("❌ Não foi possível conectar ao servidor")
+            logger.error(f"🔗 URL: {self.config['server_url']}")
+            logger.error("💡 Verifique se o servidor está rodando e a URL está correta")
+            return False
+        except requests.exceptions.Timeout:
+            logger.error("❌ Timeout na conexão com o servidor")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Erro na conectividade: {e}")
+            return False
+
     def start(self) -> None:
         """Inicia o agente"""
         logger.info("Iniciando WorkTrack Agent...")
+        
+        # Testar conectividade primeiro
+        if not self.test_server_connectivity():
+            logger.error("❌ Falha na conectividade com o servidor")
+            logger.error("🔧 Verifique a configuração e tente novamente")
+            return
         
         # Registrar sistema
         if not self.send_system_info():

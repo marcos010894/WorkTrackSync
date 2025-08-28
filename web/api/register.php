@@ -1,18 +1,11 @@
 <?php
 /**
  * API: Registro de computadores
+ * Aceita conexões de qualquer origem
  */
 
+require_once 'cors.php'; // Carrega configurações CORS
 require_once '../includes/config.php';
-
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-Computer-ID');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit(0);
-}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     Utils::jsonResponse(['error' => 'Método não permitido'], 405);
