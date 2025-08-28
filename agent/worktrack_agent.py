@@ -21,17 +21,28 @@ import uuid
 import socket
 from pathlib import Path
 
-# Configuração de logging
+# Configuração de logging com suporte Unicode para Windows
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('worktrack_agent.log'),
+        logging.FileHandler('worktrack_agent.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 
 logger = logging.getLogger(__name__)
+
+# Configurar encoding para Windows
+if platform.system() == "Windows":
+    import codecs
+    import sys
+    
+    # Configurar stdout para UTF-8
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 class WorkTrackAgent:
     def __init__(self, config_file: str = 'config.json'):
@@ -493,7 +504,7 @@ class WorkTrackAgent:
             logger.info("Testando conectividade com o servidor...")
             
             # Testar API de teste
-            test_url = f"{self.config['server_url']}/api/test.php"
+            test_url = f"{self.config['server_url']}/test.php"
             
             # Teste GET
             response = self.session.get(test_url, timeout=10)
@@ -516,22 +527,22 @@ class WorkTrackAgent:
                 logger.info("✅ Conectividade POST OK")
                 logger.info(f"🌐 Servidor: {result.get('message', 'Sem mensagem')}")
                 logger.info(f"🕒 Hora do servidor: {result.get('server_time', 'Desconhecida')}")
-                logger.info(f"🔗 CORS habilitado: {result.get('cors_enabled', False)}")
+                logger.info(f"[LINK] CORS habilitado: {result.get('cors_enabled', False)}")
                 return True
             else:
-                logger.error(f"❌ Teste POST falhou: {response.status_code}")
+                logger.error(f"[ERRO] Teste POST falhou: {response.status_code}")
                 return False
                 
         except requests.exceptions.ConnectionError:
-            logger.error("❌ Não foi possível conectar ao servidor")
-            logger.error(f"🔗 URL: {self.config['server_url']}")
-            logger.error("💡 Verifique se o servidor está rodando e a URL está correta")
+            logger.error("[ERRO] Não foi possível conectar ao servidor")
+            logger.error(f"[URL] URL: {self.config['server_url']}")
+            logger.error("[INFO] Verifique se o servidor está rodando e a URL está correta")
             return False
         except requests.exceptions.Timeout:
-            logger.error("❌ Timeout na conexão com o servidor")
+            logger.error("[ERRO] Timeout na conexão com o servidor")
             return False
         except Exception as e:
-            logger.error(f"❌ Erro na conectividade: {e}")
+            logger.error(f"[ERRO] Erro na conectividade: {e}")
             return False
 
     def start(self) -> None:
@@ -540,8 +551,8 @@ class WorkTrackAgent:
         
         # Testar conectividade primeiro
         if not self.test_server_connectivity():
-            logger.error("❌ Falha na conectividade com o servidor")
-            logger.error("🔧 Verifique a configuração e tente novamente")
+            logger.error("[ERRO] Falha na conectividade com o servidor")
+            logger.error("[CONFIG] Verifique a configuração e tente novamente")
             return
         
         # Registrar sistema
