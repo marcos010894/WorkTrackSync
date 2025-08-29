@@ -126,6 +126,31 @@ pip install --user requests
 # Clicar direito em install.bat → "Executar como administrador"
 ```
 
+### ⚠️ "Monitor não inicia automaticamente após reiniciar"
+
+#### **Solução Rápida:**
+1. **Executar:** `fix_autostart.bat`
+2. **Verificar:** `check_autostart.bat`
+
+#### **Diagnóstico Manual:**
+1. **Win + R** → `regedit`
+2. Navegar para: `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`
+3. Verificar se existe entrada `WorkTrackMonitor`
+
+#### **Correção Manual (se necessário):**
+1. **Win + R** → `shell:startup`
+2. Criar arquivo: `WorkTrackMonitor.bat`
+3. Conteúdo do arquivo:
+```bat
+@echo off
+python "%USERPROFILE%\.worktrack_monitor\monitor.py"
+```
+
+#### **Verificação:**
+1. **Ctrl + Shift + Esc** (Gerenciador de Tarefas)
+2. Procurar processo `python.exe`
+3. Verificar no dashboard online
+
 ## 📞 Suporte
 
 ### Dashboard Online

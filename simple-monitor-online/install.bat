@@ -108,16 +108,48 @@ echo if __name__=="__main__":WindowsMonitor^(^).run^(^)
 
 echo [OK] Script do monitor criado
 
+::plicação 
 :: Adicionar ao registro para autostart
 echo [INFO] Configurando inicializacao automatica...
 set SCRIPT_PATH=%INSTALL_DIR%\monitor.py
 
+:: Obter caminho completo do Python
+for /f "tokens=*" %%i in ('where python') do set PYTHON_PATH=%%i
+if "%PYTHON_PATH%"=="" (
+    echo [AVISO] Python nao encontrado no PATH, usando 'python'
+    set PYTHON_PATH=python
+)
+
+:: Criar comando com caminho completo
+set REG_COMMAND="%PYTHON_PATH%" "%SCRIPT_PATH%"
+
 :: Adicionar ao registro
-reg add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "WorkTrackMonitor" /t REG_SZ /d "python \"%SCRIPT_PATH%\"" /f >nul 2>&1
+echo [INFO] Adicionando entrada no registro...
+reg add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "WorkTrackMonitor" /t REG_SZ /d "%REG_COMMAND%" /f >nul 2>&1
 if errorlevel 1 (
-    echo [AVISO] Erro ao configurar autostart
+    echo [AVISO] Erro ao configurar autostart - tentando metodo alternativo
+    
+    :: Metodo alternativo usando powershell
+    powershell -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WorkTrackMonitor' -Value '%REG_COMMAND%'" >nul 2>&1
+    if errorlevel 1 (
+        echo [ERRO] Falha ao configurar autostart
+        echo [INFO] Configure manualmente:
+        echo [INFO] 1. Win+R, digite: regedit
+        echo [INFO] 2. Va para: HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+        echo [INFO] 3. Adicione string: WorkTrackMonitor = %REG_COMMAND%
+    ) else (
+        echo [OK] Autostart configurado (PowerShell)
+    )
 ) else (
-    echo [OK] Autostart configurado
+    echo [OK] Autostart configurado (Registro)
+)
+
+:: Verificar se foi adicionado corretamente
+reg query "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "WorkTrackMonitor" >nul 2>&1
+if errorlevel 1 (
+    echo [AVISO] Verificacao do autostart falhou
+) else (
+    echo [OK] Autostart verificado com sucesso
 )
 
 :: Tornar diretorio oculto
