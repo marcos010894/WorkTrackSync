@@ -1,8 +1,8 @@
 {
     "server_url": "https://worktracksync.online/api",
-    "monitoring_interval": 300,
-    "heartbeat_interval": 60,
+    "monitoring_interval": 30,
+    "heartbeat_interval": 10,
     "enable_remote_commands": true,
     "auto_start": true,
-    "log_level": "DEBUG"
+    "log_level": "INFO"
 }

@@ -75,8 +75,8 @@ class WorkTrackAgent:
         """Carrega configurações do arquivo JSON"""
         default_config = {
             'server_url': 'https://worktracksync.online/api',
-            'monitoring_interval': 20,   # 20 segundos
-            'heartbeat_interval': 20,    # 20 segundos
+            'monitoring_interval': 5,   # 20 segundos
+            'heartbeat_interval': 5,    # 20 segundos
             'enable_remote_commands': True,
             'auto_start': True,
             'log_level': 'INFO'

@@ -50,7 +50,7 @@ try {
                 "INSERT INTO daily_sessions (computer_id, session_date, total_minutes, updated_at) 
                  VALUES (?, ?, ?, NOW()) 
                  ON DUPLICATE KEY UPDATE 
-                 total_minutes = GREATEST(total_minutes, VALUES(total_minutes)),
+                 total_minutes = VALUES(total_minutes),
                  updated_at = NOW()",
                 [
                     $input['computer_id'],

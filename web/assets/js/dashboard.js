@@ -52,7 +52,7 @@ function startAutoRefresh() {
                 loadComputers();
             }
         }
-    }, 60000); // 60 segundos para dashboard e computadores
+    }, 15000); // 15 segundos para dashboard e computadores
 
     // Refresh específico para atividade atual - mais frequente
     activityRefreshInterval = setInterval(function() {
@@ -89,7 +89,7 @@ function startAutoRefresh() {
             }
             // Reiniciar verificação de status
             if (!statusCheckInterval) {
-                statusCheckInterval = setInterval(checkComputerStatus, 5000);
+                statusCheckInterval = setInterval(checkComputerStatus, 30000);
             }
         }
     });
@@ -994,6 +994,8 @@ function viewComputerDetails(computerId) {
 function loadSettings() {
     console.log('Carregando configurações...');
     // Implementação futura das configurações
+
+
     showNotification('Seção de configurações em desenvolvimento', 'info');
 }
 
@@ -1004,11 +1006,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Verificar sincronização de tempo
     checkTimeSync();
     
-    // Verificação inicial após 2 segundos
-    setTimeout(checkComputerStatus, 2000);
+    // Verificação inicial após 5 segundos
+    setTimeout(checkComputerStatus, 5000);
     
-    // Verificação automática a cada 5 segundos
-    statusCheckInterval = setInterval(checkComputerStatus, 5000);
+    // Verificação automática a cada 30 segundos (reduzido de 5s)
+    statusCheckInterval = setInterval(checkComputerStatus, 30000);
 });
 
 // Função para verificar sincronização de tempo

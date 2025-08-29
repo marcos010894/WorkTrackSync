@@ -10,25 +10,34 @@ class Database {
     private $username = 'u441041902_interact_workt';
     private $password = 'Mito010894';
     private $charset = 'utf8mb4';
-    private $pdo = null;
+    private static $pdo = null;
+    private static $lastConnect = 0;
     
     public function __construct() {
         $this->connect();
     }
     
     private function connect() {
+        // Reutilizar conexão existente se ainda for válida (últimos 5 minutos)
+        if (self::$pdo !== null && (time() - self::$lastConnect) < 300) {
+            return;
+        }
+        
         try {
             $dsn = "mysql:host={$this->host};dbname={$this->dbname};charset={$this->charset}";
             $options = [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_PERSISTENT => true, // Conexão persistente
+                PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
             ];
             
-            $this->pdo = new PDO($dsn, $this->username, $this->password, $options);
+            self::$pdo = new PDO($dsn, $this->username, $this->password, $options);
+            self::$lastConnect = time();
             
             // Configurar timezone para o Brasil
-            $this->pdo->exec("SET time_zone = '-03:00'");
+            self::$pdo->exec("SET time_zone = '-03:00'");
             date_default_timezone_set('America/Sao_Paulo');
             
         } catch (PDOException $e) {
@@ -38,12 +47,12 @@ class Database {
     }
     
     public function getConnection() {
-        return $this->pdo;
+        return self::$pdo;
     }
     
     public function query($sql, $params = []) {
         try {
-            $stmt = $this->pdo->prepare($sql);
+            $stmt = self::$pdo->prepare($sql);
             $stmt->execute($params);
             return $stmt;
         } catch (PDOException $e) {
@@ -65,19 +74,19 @@ class Database {
     }
     
     public function lastInsertId() {
-        return $this->pdo->lastInsertId();
+        return self::$pdo->lastInsertId();
     }
     
     public function beginTransaction() {
-        return $this->pdo->beginTransaction();
+        return self::$pdo->beginTransaction();
     }
     
     public function commit() {
-        return $this->pdo->commit();
+        return self::$pdo->commit();
     }
     
     public function rollback() {
-        return $this->pdo->rollback();
+        return self::$pdo->rollback();
     }
 }
 
