@@ -17,8 +17,11 @@ import platform
 
 class OnlineActivityMonitor:
     def __init__(self, server_url="https://simple-monitor-online.vercel.app"):
-        # Remover /api se presente
-        self.server_url = server_url.rstrip('/api').rstrip('/')
+        # Remover apenas /api no final se presente
+        if server_url.endswith('/api'):
+            self.server_url = server_url[:-4]
+        else:
+            self.server_url = server_url.rstrip('/')
         self.computer_id = self.get_computer_id()
         self.computer_name = self.get_computer_name()
         self.user_name = self.get_user_name()
