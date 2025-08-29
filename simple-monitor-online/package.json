@@ -8,6 +8,7 @@
         "deploy": "vercel --prod"
     },
     "dependencies": {
+        "mysql2": "^3.14.3",
         "ws": "^8.14.2"
     },
     "engines": {

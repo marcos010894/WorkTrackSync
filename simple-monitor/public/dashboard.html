@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,19 +11,19 @@
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-
+        
         .container {
             max-width: 1400px;
             margin: 0 auto;
         }
-
+        
         .header {
             background: rgba(255, 255, 255, 0.95);
             padding: 20px;
@@ -31,14 +32,14 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(10px);
         }
-
+        
         .header h1 {
             color: #333;
             text-align: center;
             margin-bottom: 10px;
             font-size: 2.5em;
         }
-
+        
         .connection-status {
             text-align: center;
             padding: 10px;
@@ -46,24 +47,24 @@
             font-weight: bold;
             margin-top: 10px;
         }
-
+        
         .connected {
             background: #d4edda;
             color: #155724;
         }
-
+        
         .disconnected {
             background: #f8d7da;
             color: #721c24;
         }
-
+        
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
-
+        
         .stat-card {
             background: rgba(255, 255, 255, 0.95);
             padding: 25px;
@@ -73,22 +74,33 @@
             backdrop-filter: blur(10px);
             transition: transform 0.3s ease;
         }
-
+        
         .stat-card:hover {
             transform: translateY(-5px);
         }
-
+        
         .stat-number {
             font-size: 3em;
             font-weight: bold;
             margin-bottom: 10px;
         }
-
-        .total { color: #3498db; }
-        .online { color: #27ae60; }
-        .offline { color: #e74c3c; }
-        .hours { color: #f39c12; }
-
+        
+        .total {
+            color: #3498db;
+        }
+        
+        .online {
+            color: #27ae60;
+        }
+        
+        .offline {
+            color: #e74c3c;
+        }
+        
+        .hours {
+            color: #f39c12;
+        }
+        
         .computers-section {
             background: rgba(255, 255, 255, 0.95);
             padding: 25px;
@@ -97,14 +109,14 @@
             backdrop-filter: blur(10px);
             margin-bottom: 20px;
         }
-
+        
         .computers-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
             gap: 20px;
             margin-top: 20px;
         }
-
+        
         .computer-card {
             background: #f8f9fa;
             border: 2px solid #dee2e6;
@@ -112,30 +124,30 @@
             padding: 20px;
             transition: all 0.3s ease;
         }
-
+        
         .computer-card.online {
             border-color: #28a745;
             background: #f8fff9;
         }
-
+        
         .computer-card.offline {
             border-color: #dc3545;
             background: #fff8f8;
         }
-
+        
         .computer-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
         }
-
+        
         .computer-name {
             font-size: 1.2em;
             font-weight: bold;
             color: #333;
         }
-
+        
         .status-badge {
             padding: 4px 12px;
             border-radius: 20px;
@@ -143,28 +155,28 @@
             font-weight: bold;
             text-transform: uppercase;
         }
-
+        
         .status-online {
             background: #d4edda;
             color: #155724;
         }
-
+        
         .status-offline {
             background: #f8d7da;
             color: #721c24;
         }
-
+        
         .computer-info {
             margin-bottom: 15px;
         }
-
+        
         .info-item {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
             font-size: 0.9em;
         }
-
+        
         .current-activity {
             background: #e3f2fd;
             padding: 10px;
@@ -172,13 +184,13 @@
             margin-bottom: 15px;
             border-left: 4px solid #2196f3;
         }
-
+        
         .controls {
             display: flex;
             gap: 10px;
             justify-content: center;
         }
-
+        
         .control-btn {
             padding: 8px 16px;
             border: none;
@@ -188,34 +200,34 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
-
+        
         .lock-btn {
             background: #ffc107;
             color: #000;
         }
-
+        
         .lock-btn:hover {
             background: #ffb300;
         }
-
+        
         .shutdown-btn {
             background: #dc3545;
             color: white;
         }
-
+        
         .shutdown-btn:hover {
             background: #c82333;
         }
-
+        
         .restart-btn {
             background: #6c757d;
             color: white;
         }
-
+        
         .restart-btn:hover {
             background: #5a6268;
         }
-
+        
         .activities-section {
             background: rgba(255, 255, 255, 0.95);
             padding: 25px;
@@ -223,7 +235,7 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(10px);
         }
-
+        
         .activity-log {
             max-height: 300px;
             overflow-y: auto;
@@ -232,29 +244,29 @@
             padding: 15px;
             background: #f8f9fa;
         }
-
+        
         .activity-item {
             padding: 8px 0;
             border-bottom: 1px solid #eee;
             font-size: 0.9em;
         }
-
+        
         .activity-time {
             color: #666;
             font-weight: bold;
         }
-
+        
         @media (max-width: 768px) {
             .computers-grid {
                 grid-template-columns: 1fr;
             }
-            
             .stats {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -314,13 +326,13 @@
             connect() {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = `${protocol}//${window.location.host}`;
-                
+
                 this.ws = new WebSocket(wsUrl);
 
                 this.ws.onopen = () => {
                     console.log('🔗 Conectado ao servidor');
                     this.updateConnectionStatus(true);
-                    
+
                     // Identificar como dashboard
                     this.ws.send(JSON.stringify({
                         type: 'dashboard_connect'
@@ -335,7 +347,7 @@
                 this.ws.onclose = () => {
                     console.log('❌ Desconectado do servidor');
                     this.updateConnectionStatus(false);
-                    
+
                     // Reconectar após 3 segundos
                     setTimeout(() => this.connect(), 3000);
                 };
@@ -377,16 +389,16 @@
             }
 
             updateComputers(computers) {
-                this.computers.clear();
-                computers.forEach(comp => this.computers.set(comp.id, comp));
+                    this.computers.clear();
+                    computers.forEach(comp => this.computers.set(comp.id, comp));
 
-                const grid = document.getElementById('computers-grid');
-                if (computers.length === 0) {
-                    grid.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Nenhum computador conectado</div>';
-                    return;
-                }
+                    const grid = document.getElementById('computers-grid');
+                    if (computers.length === 0) {
+                        grid.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Nenhum computador conectado</div>';
+                        return;
+                    }
 
-                grid.innerHTML = computers.map(computer => `
+                    grid.innerHTML = computers.map(computer => `
                     <div class="computer-card ${computer.status}">
                         <div class="computer-header">
                             <div class="computer-name">${computer.name}</div>
@@ -496,4 +508,5 @@
         const dashboard = new MonitorDashboard();
     </script>
 </body>
+
 </html>
