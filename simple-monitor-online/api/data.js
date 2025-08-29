@@ -7,6 +7,71 @@
 let computers = new Map();
 let activities = new Map();
 
+// Sistema de histórico integrado
+let dailyHistory = new Map();
+
+// Função para compartilhar dados históricos com outras APIs
+function getSharedHistoryData() {
+    return dailyHistory;
+}
+
+// Exportar para uso em outras APIs (simulação de compartilhamento)
+global.sharedHistoryData = getSharedHistoryData;
+
+function formatDate(date) {
+    return date.toISOString().split('T')[0];
+}
+
+function getTodayKey() {
+    return formatDate(new Date());
+}
+
+function addToHistory(data) {
+    const today = getTodayKey();
+
+    if (!dailyHistory.has(today)) {
+        dailyHistory.set(today, {
+            date: today,
+            computers: new Map(),
+            totalActivities: 0,
+            activities: []
+        });
+    }
+
+    const todayData = dailyHistory.get(today);
+
+    // Adicionar atividade
+    if (data.type === 'activity') {
+        todayData.activities.push({
+            computer_id: data.computer_id,
+            computer_name: data.computer_name || 'Desconhecido',
+            activity: data.current_activity,
+            window: data.active_window,
+            timestamp: new Date().toISOString(),
+            minutes: data.total_minutes
+        });
+
+        todayData.totalActivities++;
+
+        // Atualizar dados do computador no histórico
+        todayData.computers.set(data.computer_id, {
+            computer_id: data.computer_id,
+            computer_name: data.computer_name || 'Desconhecido',
+            user_name: data.user_name || 'Desconhecido',
+            os_info: data.os_info || 'Desconhecido',
+            total_minutes: data.total_minutes,
+            last_activity: data.current_activity,
+            last_seen: new Date().toISOString()
+        });
+    }
+
+    // Limitar histórico a 30 dias
+    if (dailyHistory.size > 30) {
+        const oldestKey = Array.from(dailyHistory.keys()).sort()[0];
+        dailyHistory.delete(oldestKey);
+    }
+}
+
 module.exports = async function handler(req, res) {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -113,6 +178,15 @@ function handleActivity(data) {
 
         activities.set(data.computer_id, computerActivities);
         computers.set(data.computer_id, computer);
+
+        // Adicionar ao histórico diário
+        const historyData = {
+            ...data,
+            computer_name: computer.computer_name,
+            user_name: computer.user_name,
+            os_info: computer.os_info
+        };
+        addToHistory(historyData);
     }
 }
 

@@ -1,41 +1,41 @@
-# Monitor Online - Sistema de Monitoramento Remoto
+# WorkTrack Monitor - Sistema de Monitoramento Silencioso
 
-Sistema completo de monitoramento de atividade em tempo real via web.
+## 📊 Sobre
+Sistema de monitoramento de atividades que funciona completamente em background, invisível ao usuário. Monitora aplicações ativas e envia dados para servidor online.
 
-## 🌟 Recursos
+## 🚀 Instalação Rápida
 
-- **Dashboard Web**: Interface moderna e responsiva
-- **Monitoramento Multiplataforma**: Windows e macOS
-- **Controle Remoto**: Bloquear, desligar ou reiniciar computadores
-- **Tempo Real**: Atualizações automáticas a cada 15 segundos
-- **Deploy na Nuvem**: Hospedado no Vercel
-
-## 🚀 Como Usar
-
-### 1. Deploy Online (Recomendado)
-
+### Instalar
 ```bash
-cd simple-monitor-online
-vercel --prod
+python3 install.py
 ```
 
-### 2. Configurar Agente nos Computadores
-
+### Desinstalar
 ```bash
-# Instalar dependências
-pip install -r agent/requirements.txt
-
-# Executar agente (substitua pela URL do seu deploy)
-python agent/monitor_online.py https://sua-url.vercel.app
+python3 uninstall.py
 ```
 
-### 3. Acessar Dashboard
+## 🔧 Como Funciona
 
-Acesse a URL do deploy para ver o dashboard com:
-- Computadores conectados
-- Atividades em tempo real
-- Controles remotos
-- Estatísticas de uso
+### Instalação Automática
+O instalador:
+1. ✅ Cria diretório oculto `~/.worktrack_monitor`
+2. ✅ Instala dependências Python (`requests`)
+3. ✅ Configura inicialização automática do sistema
+4. ✅ Inicia o monitor em background imediatamente
+5. ✅ Registra o computador no servidor
+
+### Funcionamento Invisível
+- 🔒 **Processo em background** - Não aparece interface
+- 👁️ **Invisível ao usuário** - Funciona silenciosamente  
+- 🚀 **Autostart** - Inicia automaticamente com o sistema
+- 📊 **Monitoramento contínuo** - Detecta aplicações ativas
+- 🌐 **Envio automático** - Transmite dados para servidor
+
+### Compatibilidade
+- ✅ **macOS** - Via LaunchAgent
+- ✅ **Windows** - Via Registro do Windows
+- ✅ **Linux** - Instruções para crontab
 
 ## 📊 Funcionalidades do Dashboard
 
