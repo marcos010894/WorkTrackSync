@@ -16,7 +16,7 @@ from datetime import datetime
 import platform
 
 class OnlineActivityMonitor:
-    def __init__(self, server_url="https://your-monitor.vercel.app"):
+    def __init__(self, server_url="https://simple-monitor-online.vercel.app"):
         # Remover /api se presente
         self.server_url = server_url.rstrip('/api').rstrip('/')
         self.computer_id = self.get_computer_id()

@@ -1,18 +1,18 @@
 {
-  "name": "simple-monitor-vercel",
-  "version": "1.0.0",
-  "description": "Sistema de monitoramento em tempo real - Deploy Vercel",
-  "main": "api/websocket.js",
-  "scripts": {
-    "dev": "vercel dev",
-    "deploy": "vercel --prod"
-  },
-  "dependencies": {
-    "ws": "^8.14.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "author": "WorkTrack Team",
-  "license": "MIT"
+    "name": "simple-monitor-vercel",
+    "version": "1.0.0",
+    "description": "Sistema de monitoramento em tempo real - Deploy Vercel",
+    "main": "api/websocket.js",
+    "scripts": {
+        "dev": "vercel dev",
+        "deploy": "vercel --prod"
+    },
+    "dependencies": {
+        "ws": "^8.14.2"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "author": "WorkTrack Team",
+    "license": "MIT"
 }
