@@ -1,7 +1,12 @@
 {
     "server_url": "https://worktracksync.online/api",
+    "vercel_url": "https://vercel-websocket-n11l71rlq-marcos10895s-projects.vercel.app/api",
+    "websocket_url": "ws://127.0.0.1:8081",
     "monitoring_interval": 60,
     "heartbeat_interval": 60,
+    "websocket_enabled": false,
+    "vercel_enabled": true,
+    "websocket_interval": 5,
     "enable_remote_commands": true,
     "auto_start": true,
     "log_level": "INFO"

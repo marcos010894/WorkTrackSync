@@ -28,6 +28,8 @@ import subprocess
 import uuid
 import socket
 from pathlib import Path
+import websocket
+import ssl
 
 # Configuração de logging com suporte Unicode para Windows
 logging.basicConfig(
@@ -40,6 +42,44 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+class WebSocketConnection:
+    """Classe simples para conexão WebSocket"""
+    def __init__(self, sock):
+        self.sock = sock
+    
+    def send(self, data):
+        """Envia dados via WebSocket"""
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        
+        # Frame WebSocket simples (texto)
+        length = len(data)
+        if length <= 125:
+            header = bytes([0x81, length])  # FIN=1, opcode=1 (text), length
+        elif length <= 65535:
+            header = bytes([0x81, 126]) + length.to_bytes(2, 'big')
+        else:
+            header = bytes([0x81, 127]) + length.to_bytes(8, 'big')
+        
+        # Masking (obrigatório para cliente)
+        import os
+        mask = os.urandom(4)
+        masked_data = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+        
+        # Ajustar header para incluir mask
+        if length <= 125:
+            header = bytes([0x81, length | 0x80]) + mask  # Set mask bit
+        elif length <= 65535:
+            header = bytes([0x81, 126 | 0x80]) + length.to_bytes(2, 'big') + mask
+        else:
+            header = bytes([0x81, 127 | 0x80]) + length.to_bytes(8, 'big') + mask
+            
+        self.sock.send(header + masked_data)
+    
+    def close(self):
+        """Fecha conexão"""
+        self.sock.close()
 
 # Configurar encoding para Windows
 if platform.system() == "Windows":
@@ -61,6 +101,10 @@ class WorkTrackAgent:
         self.is_running = False
         self.current_programs = {}
         self.session_start_time = datetime.now()
+        
+        # WebSocket
+        self.ws = None
+        self.ws_connected = False
         
         # Configurar headers padrão
         self.session.headers.update({
@@ -549,6 +593,174 @@ class WorkTrackAgent:
                 logger.error(f"Erro no worker de monitoramento: {e}")
                 time.sleep(self.config['monitoring_interval'])
 
+    def websocket_worker(self) -> None:
+        """Worker thread para WebSocket"""
+        if not self.config.get('websocket_enabled', False):
+            return
+            
+        while self.is_running:
+            try:
+                # Verificar se deve usar Vercel ou WebSocket local
+                if self.config.get('vercel_enabled', False):
+                    self.send_to_vercel()
+                else:
+                    # Usar WebSocket local
+                    if not self.ws_connected:
+                        self.connect_websocket()
+                    
+                    if self.ws_connected:
+                        # Enviar dados via WebSocket
+                        data = {
+                            'type': 'agent_data',
+                            'computer_id': self.computer_id,
+                            'usage_minutes': self.calculate_usage_time(),
+                            'timestamp': datetime.now().isoformat(),
+                            'running_programs': self.get_running_programs(),
+                            'active_window': self.get_active_window()
+                        }
+                        
+                        try:
+                            self.ws.send(json.dumps(data))
+                            logger.debug("Dados enviados via WebSocket")
+                        except Exception as e:
+                            logger.error(f"Erro ao enviar via WebSocket: {e}")
+                            self.ws_connected = False
+                            self.ws = None
+                
+                time.sleep(self.config.get('websocket_interval', 5))
+                
+            except Exception as e:
+                logger.error(f"Erro no worker WebSocket: {e}")
+                time.sleep(self.config.get('websocket_interval', 5))
+
+    def send_to_vercel(self) -> bool:
+        """Envia dados para o Vercel via HTTP API"""
+        try:
+            vercel_url = self.config.get('vercel_url')
+            if not vercel_url:
+                logger.error("Vercel URL não configurada")
+                return False
+            
+            # Dados para enviar
+            computer_info = self.get_system_info()
+            
+            # Se é o primeiro envio, registrar o agente
+            if not hasattr(self, '_vercel_registered'):
+                register_data = {
+                    'type': 'agent_register',
+                    'computer_id': self.computer_id,
+                    'computer_name': computer_info.get('computer_name', 'Computador Desconhecido'),
+                    'os_info': computer_info.get('os_info', 'Sistema Desconhecido'),
+                    'user_name': computer_info.get('user_name', 'Usuário Desconhecido')
+                }
+                
+                response = self.session.post(
+                    f"{vercel_url}/agent-data",
+                    json=register_data,
+                    timeout=10
+                )
+                
+                if response.status_code in [200, 201]:
+                    self._vercel_registered = True
+                    logger.info(f"Agente registrado no Vercel: {self.computer_id}")
+                else:
+                    logger.error(f"Erro ao registrar no Vercel: {response.status_code}")
+                    return False
+            
+            # Enviar dados atuais
+            data = {
+                'type': 'agent_data',
+                'computer_id': self.computer_id,
+                'usage_minutes': self.calculate_usage_time(),
+                'timestamp': datetime.now().isoformat(),
+                'running_programs': self.get_running_programs(),
+                'active_window': self.get_active_window()
+            }
+            
+            response = self.session.post(
+                f"{vercel_url}/agent-data",
+                json=data,
+                timeout=10
+            )
+            
+            if response.status_code in [200, 201]:
+                logger.debug("Dados enviados para Vercel com sucesso")
+                return True
+            else:
+                logger.error(f"Erro ao enviar dados para Vercel: {response.status_code}")
+                return False
+                
+        except requests.exceptions.ConnectionError:
+            logger.error("Erro de conexão ao enviar para Vercel")
+        except requests.exceptions.Timeout:
+            logger.error("Timeout ao enviar para Vercel")
+        except Exception as e:
+            logger.error(f"Erro ao enviar para Vercel: {e}")
+        
+        return False
+
+    def connect_websocket(self) -> None:
+        """Conecta ao servidor WebSocket Node.js"""
+        try:
+            websocket_url = self.config.get('websocket_url')
+            if not websocket_url:
+                return
+            
+            # Usar uma implementação simples de WebSocket com sockets
+            import socket
+            import base64
+            import hashlib
+            
+            # Parse URL
+            url_parts = websocket_url.replace('ws://', '').split(':')
+            host = url_parts[0]
+            port = int(url_parts[1]) if len(url_parts) > 1 else 8081
+            
+            # Criar socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(10)
+            sock.connect((host, port))
+            
+            # Handshake WebSocket
+            key = base64.b64encode(os.urandom(16)).decode()
+            request = f"""GET / HTTP/1.1\r
+Host: {host}:{port}\r
+Upgrade: websocket\r
+Connection: Upgrade\r
+Sec-WebSocket-Key: {key}\r
+Sec-WebSocket-Version: 13\r
+\r
+"""
+            sock.send(request.encode())
+            
+            # Ler resposta
+            response = sock.recv(1024).decode()
+            if '101 Switching Protocols' in response:
+                self.ws = WebSocketConnection(sock)
+                self.ws_connected = True
+                logger.info("WebSocket conectado com sucesso")
+                
+                # Registrar como agente
+                computer_info = self.get_system_info()
+                register_data = {
+                    'type': 'agent_register',
+                    'computer_id': self.computer_id,
+                    'computer_name': computer_info.get('computer_name', 'Computador Desconhecido'),
+                    'os_info': computer_info.get('os_info', 'Desconhecido'),
+                    'user_name': computer_info.get('user_name', 'Usuário Desconhecido')
+                }
+                
+                self.ws.send(json.dumps(register_data))
+                logger.info(f"Agente registrado no WebSocket: {self.computer_id}")
+                
+            else:
+                sock.close()
+                logger.error("Falha no handshake WebSocket")
+                
+        except Exception as e:
+            logger.error(f"Erro ao conectar WebSocket: {e}")
+            self.ws_connected = False
+
     def test_server_connectivity(self) -> bool:
         """Testa conectividade com o servidor"""
         try:
@@ -615,9 +827,11 @@ class WorkTrackAgent:
         # Iniciar threads de trabalho
         heartbeat_thread = threading.Thread(target=self.heartbeat_worker, daemon=True)
         monitoring_thread = threading.Thread(target=self.monitoring_worker, daemon=True)
+        websocket_thread = threading.Thread(target=self.websocket_worker, daemon=True)
         
         heartbeat_thread.start()
         monitoring_thread.start()
+        websocket_thread.start()
         
         logger.info("WorkTrack Agent iniciado com sucesso")
         

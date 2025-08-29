@@ -385,7 +385,6 @@ $currentUser = $auth->getCurrentUser();
                         <label class="form-label">Tipo de Comando</label>
                         <select id="commandType" class="form-select" onchange="toggleCommandData()">
                             <option value="lock">Bloquear Tela</option>
-                            <option value="message">Enviar Mensagem</option>
                             <option value="restart">Reiniciar</option>
                             <option value="shutdown">Desligar</option>
                         </select>
@@ -413,5 +412,20 @@ $currentUser = $auth->getCurrentUser();
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="assets/js/dashboard.js"></script>
+    <script src="assets/js/websocket-client.js"></script>
+    <script>
+        // Carregar SSE client se estiver no Vercel
+        if (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('vercel.com')) {
+            const sseScript = document.createElement('script');
+            sseScript.src = '/api/sse-client.js';
+            sseScript.onerror = () => {
+                console.log('📡 Usando SSE client local');
+                const localScript = document.createElement('script');
+                localScript.src = 'assets/js/sse-client.js';
+                document.head.appendChild(localScript);
+            };
+            document.head.appendChild(sseScript);
+        }
+    </script>
 </body>
 </html>
