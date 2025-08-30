@@ -67,6 +67,16 @@ async function validateTimeData(data) {
         const newAgentMinutes = data.total_minutes || 0;
         const lastAgentMinutes = lastAgentValues.get(data.computer_id) || 0;
 
+        // RESETAR se tempo atual for absurdo (>12 horas por dia)
+        if (currentTodayMinutes > 720) { // 12 horas = 720 minutos
+            console.log(`🚨 RESET: ${data.computer_name} tinha ${currentTodayMinutes}min (>12h) - resetando para 0`);
+            await dao.resetDeviceDailyTime(data.computer_id);
+            const resetMinutes = Math.min(newAgentMinutes, 60); // Máximo 1 hora para restart
+            data.total_minutes = resetMinutes;
+            lastAgentValues.set(data.computer_id, newAgentMinutes);
+            return data;
+        }
+
         if (currentTodayMinutes > 0) {
             // Já existe registro para hoje
 
@@ -76,7 +86,7 @@ async function validateTimeData(data) {
             if (newAgentMinutes > lastAgentMinutes) {
                 // Agente incrementou normalmente
                 agentIncrement = newAgentMinutes - lastAgentMinutes;
-                
+
                 // Limitar incremento a no máximo 5 minutos por vez (mais conservador)
                 if (agentIncrement > 5) {
                     agentIncrement = 1; // Se incremento for muito grande, adicionar apenas 1 minuto

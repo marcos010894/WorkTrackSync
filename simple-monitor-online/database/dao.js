@@ -70,6 +70,24 @@ async function getDeviceTodayMinutes(deviceId) {
     }
 }
 
+// Resetar tempo diário de um dispositivo específico
+async function resetDeviceDailyTime(deviceId) {
+    const query = `
+        UPDATE daily_history 
+        SET total_minutes = 0, total_activities = 0 
+        WHERE device_id = ? AND date = CURDATE()
+    `;
+
+    try {
+        await db.executeQuery(query, [deviceId]);
+        console.log(`🔄 Reset do tempo diário: ${deviceId}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao resetar tempo diário:', error);
+        return false;
+    }
+}
+
 // Obter todos os dispositivos
 async function getAllDevices() {
     const query = `
@@ -355,6 +373,7 @@ module.exports = {
     getDeviceById,
     getAllDevices,
     getDeviceTodayMinutes,
+    resetDeviceDailyTime,
     updateDevicesStatus,
 
     // Atividades
