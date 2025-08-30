@@ -234,6 +234,13 @@ async function getAllDevices() {
 // Funções de manipulação de dados (agora com MySQL)
 async function handleRegister(data) {
     try {
+        console.log(`🔍 Dados de registro recebidos:`, {
+            id: data.computer_id,
+            name: data.computer_name,
+            user: data.user_name,
+            os: data.os_info
+        });
+
         // Registrar no MySQL
         const device = await registerDevice(data);
 

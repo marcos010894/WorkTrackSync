@@ -30,6 +30,13 @@ async function registerDevice(deviceData) {
         deviceData.os_info || 'Sistema Desconhecido'
     ];
 
+    console.log(`🔍 Registrando dispositivo:`, {
+        id: deviceData.computer_id,
+        name: deviceData.computer_name,
+        user: deviceData.user_name,
+        os: deviceData.os_info
+    });
+
     try {
         await db.executeQuery(query, params);
         console.log(`✅ Dispositivo registrado: ${deviceData.computer_name}`);
