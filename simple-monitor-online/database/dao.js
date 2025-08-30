@@ -299,6 +299,26 @@ async function updateCommandStatus(commandId, status, errorMessage = null) {
  * LIMPEZA E MANUTENÇÃO
  */
 
+// Limpar dispositivos de teste
+async function cleanTestDevices() {
+    const queries = [
+        "DELETE FROM activities WHERE device_id LIKE 'test%'",
+        "DELETE FROM daily_history WHERE device_id LIKE 'test%'",
+        "DELETE FROM devices WHERE id LIKE 'test%' OR id LIKE '%test%'"
+    ];
+
+    try {
+        for (const query of queries) {
+            const result = await db.executeQuery(query);
+            console.log(`🧪 Removendo testes: ${result.affectedRows} registros removidos`);
+        }
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao limpar dispositivos de teste:', error);
+        throw error;
+    }
+}
+
 // Limpar dados antigos (manter últimos 90 dias)
 async function cleanOldData() {
     const queries = [
@@ -339,5 +359,6 @@ module.exports = {
     updateCommandStatus,
 
     // Manutenção
-    cleanOldData
+    cleanOldData,
+    cleanTestDevices
 };

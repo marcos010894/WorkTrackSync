@@ -356,6 +356,10 @@ module.exports = async function handler(req, res) {
                     await handleHeartbeat(data);
                     break;
 
+                case 'cleanup_test_devices':
+                    await dao.cleanTestDevices();
+                    break;
+
                 default:
                     console.warn('⚠️ Tipo de dados desconhecido:', data.type);
             }
