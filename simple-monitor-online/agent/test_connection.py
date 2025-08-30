@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 
 def test_connection():
-    server_url = "https://simple-monitor-online-eqh2p2ir4-marcos10895s-projects.vercel.app"
+    server_url = "https://simple-monitor-online.vercel.app"
     
     print("🧪 TESTE DE CONEXÃO")
     print("=" * 40)
