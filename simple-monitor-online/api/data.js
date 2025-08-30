@@ -64,8 +64,17 @@ async function validateTimeData(data) {
         const newMinutes = data.total_minutes || 0;
         
         if (currentTodayMinutes > 0) {
-            // Já existe registro para hoje - o tempo só pode crescer
-            if (newMinutes < currentTodayMinutes) {
+            // Já existe registro para hoje
+            
+            // Detectar se agente reiniciou (valor muito menor que o atual)
+            if (newMinutes < currentTodayMinutes && newMinutes <= 60) {
+                // Agente provavelmente reiniciou - somar ao tempo atual
+                const incrementedMinutes = currentTodayMinutes + newMinutes;
+                console.log(`🔄 Agente reiniciou: ${data.computer_name} ${currentTodayMinutes}min + ${newMinutes}min = ${incrementedMinutes}min`);
+                data.total_minutes = incrementedMinutes;
+            }
+            // Se valor é só um pouco menor, manter o atual (pode ser atraso de rede)
+            else if (newMinutes < currentTodayMinutes) {
                 console.log(`⚠️ Correção (tempo menor): ${data.computer_name} ${newMinutes}min -> ${currentTodayMinutes}min`);
                 data.total_minutes = currentTodayMinutes;
             }
