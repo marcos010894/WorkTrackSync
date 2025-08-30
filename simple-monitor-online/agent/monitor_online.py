@@ -12,7 +12,7 @@ import sys
 import threading
 import subprocess
 import requests
-from datetime import datetime
+from datetime import datetime, date
 import platform
 
 class OnlineActivityMonitor:
@@ -26,8 +26,9 @@ class OnlineActivityMonitor:
         self.computer_name = self.get_computer_name()
         self.user_name = self.get_user_name()
         self.os_info = self.get_os_info()
-        self.total_minutes = 0
-        self.start_time = time.time()
+        self.session_start_time = time.time()
+        self.current_day = date.today()
+        self.last_sent_minutes = 0  # Para enviar apenas incrementos
         self.is_running = False
         
         print(f"🖥️ Monitor Online iniciado")
@@ -188,9 +189,24 @@ class OnlineActivityMonitor:
     def send_activity(self):
         """Enviar dados de atividade para o servidor"""
         try:
-            # Calcular tempo total
+            # Verificar se é um novo dia
+            today = date.today()
+            if today != self.current_day:
+                print(f"🗓️ Novo dia detectado: {today}")
+                self.current_day = today
+                self.session_start_time = time.time()
+                self.last_sent_minutes = 0
+            
+            # Calcular tempo apenas da sessão atual do dia
             current_time = time.time()
-            self.total_minutes = int((current_time - self.start_time) / 60)
+            session_minutes = int((current_time - self.session_start_time) / 60)
+            
+            # Calcular apenas o incremento de tempo (novos minutos)
+            new_minutes = session_minutes - self.last_sent_minutes
+            
+            # Só enviar se houver novos minutos
+            if new_minutes <= 0:
+                return True  # Sem novos minutos para enviar
             
             # Obter atividade atual
             activity = self.get_current_activity()
@@ -199,7 +215,7 @@ class OnlineActivityMonitor:
             data = {
                 'type': 'activity',
                 'computer_id': self.computer_id,
-                'total_minutes': self.total_minutes,
+                'total_minutes': new_minutes,  # Apenas os novos minutos
                 'current_activity': activity,
                 'active_window': window_info['window_title'] if window_info else None,
                 'timestamp': datetime.now().isoformat()
@@ -209,7 +225,8 @@ class OnlineActivityMonitor:
                                    json=data, timeout=10)
             
             if response.status_code == 200:
-                print(f"📊 {activity} - {self.total_minutes}min")
+                self.last_sent_minutes = session_minutes  # Atualizar o último enviado
+                print(f"📊 {activity} - +{new_minutes}min (incremento) | Total sessão: {session_minutes}min")
                 return True
             else:
                 print(f"❌ Erro ao enviar atividade: {response.status_code}")
