@@ -12,7 +12,7 @@ python3 -c "import requests" 2>/dev/null || {
 
 # Executar agente
 echo "🌐 Conectando ao servidor..."
-echo "Dashboard: https://simple-monitor-online.vercel.app"
+echo "Dashboard: https://simple-monitor-online-eqh2p2ir4-marcos10895s-projects.vercel.app"
 echo ""
 
 python3 monitor_online.py
