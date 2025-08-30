@@ -69,34 +69,38 @@ async function validateTimeData(data) {
 
         if (currentTodayMinutes > 0) {
             // Já existe registro para hoje
-            
+
             // Calcular incremento real do agente
             let agentIncrement = 0;
-            
+
             if (newAgentMinutes > lastAgentMinutes) {
                 // Agente incrementou normalmente
                 agentIncrement = newAgentMinutes - lastAgentMinutes;
-            } else if (newAgentMinutes < lastAgentMinutes && newAgentMinutes <= 10) {
-                // Possível reinicialização - usar valor do agente como incremento
-                agentIncrement = newAgentMinutes;
-                console.log(`🔄 Reinicialização detectada: ${data.computer_name} - incremento: ${agentIncrement}min`);
-            } else {
-                // Sem incremento ou valor estranho
+                
+                // Limitar incremento a no máximo 5 minutos por vez (mais conservador)
+                if (agentIncrement > 5) {
+                    agentIncrement = 1; // Se incremento for muito grande, adicionar apenas 1 minuto
+                    console.log(`⚠️ Incremento grande detectado, limitando a +1min: ${data.computer_name}`);
+                }
+            } else if (newAgentMinutes < lastAgentMinutes && newAgentMinutes <= 5) {
+                // Possível reinicialização - adicionar apenas 1 minuto
+                agentIncrement = 1;
+                console.log(`🔄 Reinicialização detectada: ${data.computer_name} - adicionando +1min`);
+            } else if (newAgentMinutes === lastAgentMinutes) {
+                // Mesmo valor - sem incremento
                 agentIncrement = 0;
+            } else {
+                // Valor estranho - adicionar apenas 1 minuto por segurança
+                agentIncrement = 1;
+                console.log(`⚠️ Valor anômalo, adicionando +1min: ${data.computer_name}`);
             }
-            
-            // Limitar incremento máximo a 10 minutos por vez
-            if (agentIncrement > 10) {
-                agentIncrement = 10;
-                console.log(`⚠️ Incremento limitado a 10min: ${data.computer_name}`);
-            }
-            
+
             // Aplicar incremento ao total atual
             const newTotalMinutes = currentTodayMinutes + agentIncrement;
             data.total_minutes = newTotalMinutes;
-            
+
             console.log(`✅ ${data.computer_name}: Agent ${lastAgentMinutes}min→${newAgentMinutes}min (+${agentIncrement}min) = Total ${newTotalMinutes}min`);
-            
+
         } else {
             // Primeiro registro do dia
             if (newAgentMinutes > 600) { // Mais de 10 horas para início de dia é suspeito
@@ -106,7 +110,7 @@ async function validateTimeData(data) {
                 console.log(`✅ Novo dia iniciado: ${data.computer_name} - ${newAgentMinutes}min`);
             }
         }
-        
+
         // Salvar último valor do agente para próxima comparação
         lastAgentValues.set(data.computer_id, newAgentMinutes);
 
@@ -115,7 +119,7 @@ async function validateTimeData(data) {
         console.error('❌ Erro na validação de tempo:', error);
         return data;
     }
-}// Função para limpar dados do dia anterior e garantir reset diário
+} // Função para limpar dados do dia anterior e garantir reset diário
 async function cleanupDailyData() {
     try {
         const today = new Date().toISOString().split('T')[0];
