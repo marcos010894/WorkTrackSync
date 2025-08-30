@@ -65,32 +65,44 @@ async function validateTimeData(data) {
 
         if (currentTodayMinutes > 0) {
             // Já existe registro para hoje
+            const difference = newMinutes - currentTodayMinutes;
 
-            // Detectar se agente reiniciou (valor muito menor que o atual)
-            if (newMinutes < currentTodayMinutes && newMinutes <= 60) {
-                // Agente provavelmente reiniciou - somar ao tempo atual
-                const incrementedMinutes = currentTodayMinutes + newMinutes;
-                console.log(`🔄 Agente reiniciou: ${data.computer_name} ${currentTodayMinutes}min + ${newMinutes}min = ${incrementedMinutes}min`);
-                data.total_minutes = incrementedMinutes;
+            // Se o tempo é exatamente igual, não fazer nada
+            if (newMinutes === currentTodayMinutes) {
+                console.log(`⏸️ Sem mudança: ${data.computer_name} - ${newMinutes}min`);
+                return data;
             }
-            // Se valor é só um pouco menor, manter o atual (pode ser atraso de rede)
-            else if (newMinutes < currentTodayMinutes) {
-                console.log(`⚠️ Correção (tempo menor): ${data.computer_name} ${newMinutes}min -> ${currentTodayMinutes}min`);
-                data.total_minutes = currentTodayMinutes;
+            
+            // Se o novo valor é maior (incremento normal)
+            if (newMinutes > currentTodayMinutes) {
+                // Se incremento é muito grande (>2h), limitar
+                if (difference > 120) {
+                    const correctedMinutes = currentTodayMinutes + 120;
+                    console.log(`⚠️ Incremento limitado: ${data.computer_name} ${newMinutes}min -> ${correctedMinutes}min`);
+                    data.total_minutes = correctedMinutes;
+                } else {
+                    console.log(`✅ Incremento normal: ${data.computer_name} ${currentTodayMinutes}min -> ${newMinutes}min (+${difference}min)`);
+                }
             }
-            // Se a diferença for muito grande (mais de 2 horas), limitar incremento
-            else if (newMinutes - currentTodayMinutes > 120) {
-                const correctedMinutes = currentTodayMinutes + 120;
-                console.log(`⚠️ Correção (incremento grande): ${data.computer_name} ${newMinutes}min -> ${correctedMinutes}min`);
-                data.total_minutes = correctedMinutes;
-            } else {
-                console.log(`✅ Tempo válido: ${data.computer_name} ${currentTodayMinutes}min -> ${newMinutes}min (+${newMinutes-currentTodayMinutes}min)`);
+            // Se o novo valor é menor
+            else {
+                // Detectar reinicialização APENAS se:
+                // 1. Valor atual > 60min E novo valor <= 10min E diferença > 50min
+                if (currentTodayMinutes > 60 && newMinutes <= 10 && (currentTodayMinutes - newMinutes) > 50) {
+                    const incrementedMinutes = currentTodayMinutes + newMinutes;
+                    console.log(`🔄 Reinicialização detectada: ${data.computer_name} ${currentTodayMinutes}min + ${newMinutes}min = ${incrementedMinutes}min`);
+                    data.total_minutes = incrementedMinutes;
+                } else {
+                    // Caso contrário, manter valor atual
+                    console.log(`⚠️ Mantendo valor: ${data.computer_name} ${newMinutes}min -> ${currentTodayMinutes}min`);
+                    data.total_minutes = currentTodayMinutes;
+                }
             }
         } else {
             // Primeiro registro do dia
             if (newMinutes > 600) { // Mais de 10 horas para início de dia é suspeito
                 console.log(`⚠️ Novo dia (valor alto): ${data.computer_name} ${newMinutes}min -> 30min`);
-                data.total_minutes = 30; // Começar com 30 minutos
+                data.total_minutes = 30;
             } else {
                 console.log(`✅ Novo dia iniciado: ${data.computer_name} - ${newMinutes}min`);
             }
@@ -99,7 +111,7 @@ async function validateTimeData(data) {
         return data;
     } catch (error) {
         console.error('❌ Erro na validação de tempo:', error);
-        return data; // Retorna dados originais se validação falhar
+        return data;
     }
 }
 
