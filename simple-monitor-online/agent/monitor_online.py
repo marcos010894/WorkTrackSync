@@ -16,7 +16,7 @@ from datetime import datetime, date
 import platform
 
 class OnlineActivityMonitor:
-    def __init__(self, server_url="https://simple-monitor-online-l91cr1ty0-marcos10895s-projects.vercel.app"):
+    def __init__(self, server_url="https://simple-monitor-online-5obmq2jir-marcos10895s-projects.vercel.app"):
         # Remover apenas /api no final se presente
         if server_url.endswith('/api'):
             self.server_url = server_url[:-4]
@@ -346,7 +346,7 @@ class OnlineActivityMonitor:
 
 def main():
     # URL do servidor
-    server_url = "https://simple-monitor-online-l91cr1ty0-marcos10895s-projects.vercel.app"
+    server_url = "https://simple-monitor-online-5obmq2jir-marcos10895s-projects.vercel.app"
     
     # Verificar argumentos da linha de comando
     if len(sys.argv) > 1:
