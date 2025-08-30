@@ -95,6 +95,31 @@ async function resetDeviceDailyTime(deviceId) {
     }
 }
 
+// Atualizar informações do dispositivo
+async function updateDeviceInfo(deviceId, deviceInfo) {
+    const query = `
+        UPDATE devices 
+        SET name = ?, user_name = ?, os_info = ?, last_seen = NOW()
+        WHERE id = ?
+    `;
+
+    const params = [
+        deviceInfo.name || 'Computador Desconhecido',
+        deviceInfo.user_name || 'Usuário Desconhecido', 
+        deviceInfo.os_info || 'Sistema Desconhecido',
+        deviceId
+    ];
+
+    try {
+        await db.executeQuery(query, params);
+        console.log(`🔄 Info atualizada: ${deviceInfo.name}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao atualizar info do dispositivo:', error);
+        return false;
+    }
+}
+
 // Obter todos os dispositivos
 async function getAllDevices() {
     const query = `
@@ -381,6 +406,7 @@ module.exports = {
     getAllDevices,
     getDeviceTodayMinutes,
     resetDeviceDailyTime,
+    updateDeviceInfo,
     updateDevicesStatus,
 
     // Atividades

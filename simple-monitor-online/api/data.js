@@ -275,6 +275,15 @@ async function handleRegister(data) {
 
 async function handleActivity(data) {
     try {
+        // Sempre atualizar informações do dispositivo com dados da atividade
+        if (data.computer_name && data.computer_name !== 'undefined') {
+            await dao.updateDeviceInfo(data.computer_id, {
+                name: data.computer_name,
+                user_name: data.user_name,
+                os_info: data.os_info
+            });
+        }
+
         // Salvar atividade no MySQL
         await addToHistory(data);
 
