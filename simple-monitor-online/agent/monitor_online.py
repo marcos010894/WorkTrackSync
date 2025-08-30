@@ -339,7 +339,7 @@ class OnlineActivityMonitor:
 
 def main():
     # URL do servidor
-    server_url = "https://simple-monitor-online.vercel.app"
+    server_url = "https://simple-monitor-online-rkkf1lckm-marcos10895s-projects.vercel.app"
     
     # Verificar argumentos da linha de comando
     if len(sys.argv) > 1:

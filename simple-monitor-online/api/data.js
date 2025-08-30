@@ -104,7 +104,7 @@ async function getAllDevices() {
                 total_sessions: device.total_sessions,
                 is_online: device.is_online,
                 current_activity: currentData ? currentData.current_activity : (device.is_online ? 'Ativo' : 'Offline'),
-                total_minutes: device.today_minutes || 0,
+                today_minutes: device.today_minutes || 0,
                 total_minutes_all_time: device.total_minutes_all_time || 0,
                 total_activities_all_time: device.total_activities_all_time || 0,
                 last_activity_time: device.last_seen
@@ -125,7 +125,7 @@ async function getAllDevices() {
                 total_sessions: 1,
                 is_online: true,
                 current_activity: data.current_activity || 'Ativo',
-                total_minutes: data.total_minutes || 0,
+                today_minutes: data.total_minutes || 0,
                 last_activity_time: new Date().toISOString()
             });
         });
@@ -280,6 +280,14 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'GET') {
         try {
+            // Verificar se é requisição de comandos
+            if (req.query && req.query.commands === 'true') {
+                return res.status(200).json({
+                    success: true,
+                    commands: [] // Por enquanto vazio, mas endpoint funcionando
+                });
+            }
+
             // Obter todos os dispositivos do MySQL
             const allDevices = await getAllDevices();
 
@@ -311,7 +319,7 @@ module.exports = async function handler(req, res) {
                     name: data.computer_name || 'Computador Desconhecido',
                     is_online: true,
                     current_activity: data.current_activity || 'Ativo',
-                    total_minutes: data.total_minutes || 0
+                    today_minutes: data.total_minutes || 0
                 });
             });
 
