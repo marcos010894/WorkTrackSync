@@ -65,44 +65,32 @@ async function validateTimeData(data) {
 
         if (currentTodayMinutes > 0) {
             // Já existe registro para hoje
-            const difference = newMinutes - currentTodayMinutes;
-
-            // Se o tempo é exatamente igual, não fazer nada
-            if (newMinutes === currentTodayMinutes) {
-                console.log(`⏸️ Sem mudança: ${data.computer_name} - ${newMinutes}min`);
-                return data;
-            }
             
-            // Se o novo valor é maior (incremento normal)
+            // REGRA SIMPLES: Tempo só pode crescer gradualmente
             if (newMinutes > currentTodayMinutes) {
-                // Se incremento é muito grande (>2h), limitar
-                if (difference > 120) {
-                    const correctedMinutes = currentTodayMinutes + 120;
-                    console.log(`⚠️ Incremento limitado: ${data.computer_name} ${newMinutes}min -> ${correctedMinutes}min`);
-                    data.total_minutes = correctedMinutes;
-                } else {
-                    console.log(`✅ Incremento normal: ${data.computer_name} ${currentTodayMinutes}min -> ${newMinutes}min (+${difference}min)`);
+                const increment = newMinutes - currentTodayMinutes;
+                
+                // Se incremento é normal (até 5 minutos), aceitar
+                if (increment <= 5) {
+                    console.log(`✅ Incremento normal: ${data.computer_name} ${currentTodayMinutes}min -> ${newMinutes}min (+${increment}min)`);
+                }
+                // Se incremento é muito grande, limitar a +5 minutos por vez
+                else {
+                    const limitedMinutes = currentTodayMinutes + 5;
+                    console.log(`⚠️ Incremento limitado: ${data.computer_name} ${newMinutes}min -> ${limitedMinutes}min (max +5min)`);
+                    data.total_minutes = limitedMinutes;
                 }
             }
-            // Se o novo valor é menor
+            // Se valor é menor ou igual, manter o atual
             else {
-                // Detectar reinicialização APENAS se:
-                // 1. Valor atual > 60min E novo valor <= 10min E diferença > 50min
-                if (currentTodayMinutes > 60 && newMinutes <= 10 && (currentTodayMinutes - newMinutes) > 50) {
-                    const incrementedMinutes = currentTodayMinutes + newMinutes;
-                    console.log(`🔄 Reinicialização detectada: ${data.computer_name} ${currentTodayMinutes}min + ${newMinutes}min = ${incrementedMinutes}min`);
-                    data.total_minutes = incrementedMinutes;
-                } else {
-                    // Caso contrário, manter valor atual
-                    console.log(`⚠️ Mantendo valor: ${data.computer_name} ${newMinutes}min -> ${currentTodayMinutes}min`);
-                    data.total_minutes = currentTodayMinutes;
-                }
+                console.log(`⚠️ Mantendo valor atual: ${data.computer_name} ${newMinutes}min -> ${currentTodayMinutes}min`);
+                data.total_minutes = currentTodayMinutes;
             }
         } else {
             // Primeiro registro do dia
             if (newMinutes > 600) { // Mais de 10 horas para início de dia é suspeito
-                console.log(`⚠️ Novo dia (valor alto): ${data.computer_name} ${newMinutes}min -> 30min`);
-                data.total_minutes = 30;
+                console.log(`⚠️ Novo dia (valor alto): ${data.computer_name} ${newMinutes}min -> 1min`);
+                data.total_minutes = 1;
             } else {
                 console.log(`✅ Novo dia iniciado: ${data.computer_name} - ${newMinutes}min`);
             }
