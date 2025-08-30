@@ -62,10 +62,10 @@ async function validateTimeData(data) {
         // Buscar minutos já registrados hoje para este dispositivo
         const currentTodayMinutes = await dao.getDeviceTodayMinutes(data.computer_id);
         const newMinutes = data.total_minutes || 0;
-        
+
         if (currentTodayMinutes > 0) {
             // Já existe registro para hoje
-            
+
             // Detectar se agente reiniciou (valor muito menor que o atual)
             if (newMinutes < currentTodayMinutes && newMinutes <= 60) {
                 // Agente provavelmente reiniciou - somar ao tempo atual
@@ -83,8 +83,7 @@ async function validateTimeData(data) {
                 const correctedMinutes = currentTodayMinutes + 120;
                 console.log(`⚠️ Correção (incremento grande): ${data.computer_name} ${newMinutes}min -> ${correctedMinutes}min`);
                 data.total_minutes = correctedMinutes;
-            }
-            else {
+            } else {
                 console.log(`✅ Tempo válido: ${data.computer_name} ${currentTodayMinutes}min -> ${newMinutes}min (+${newMinutes-currentTodayMinutes}min)`);
             }
         } else {
@@ -96,7 +95,7 @@ async function validateTimeData(data) {
                 console.log(`✅ Novo dia iniciado: ${data.computer_name} - ${newMinutes}min`);
             }
         }
-        
+
         return data;
     } catch (error) {
         console.error('❌ Erro na validação de tempo:', error);
@@ -109,14 +108,14 @@ async function cleanupDailyData() {
     try {
         const today = new Date().toISOString().split('T')[0];
         console.log(`🧹 Executando limpeza diária para ${today}`);
-        
+
         // Atualizar status de dispositivos offline
         await dao.updateDevicesStatus();
-        
+
         // Log de status
         const stats = await dao.getSystemStats();
         console.log(`📊 Status: ${stats.online_devices} online, ${stats.offline_devices} offline, ${stats.today_minutes}min hoje`);
-        
+
     } catch (error) {
         console.error('❌ Erro na limpeza diária:', error);
     }
