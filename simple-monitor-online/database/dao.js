@@ -53,6 +53,23 @@ async function getDeviceById(deviceId) {
     }
 }
 
+// Verificar se dispositivo já tem dados hoje
+async function getDeviceTodayMinutes(deviceId) {
+    const query = `
+        SELECT total_minutes 
+        FROM daily_history 
+        WHERE device_id = ? AND date = CURDATE()
+    `;
+
+    try {
+        const results = await db.executeQuery(query, [deviceId]);
+        return results[0] ? results[0].total_minutes : 0;
+    } catch (error) {
+        console.error('❌ Erro ao buscar minutos do dia:', error);
+        return 0;
+    }
+}
+
 // Obter todos os dispositivos
 async function getAllDevices() {
     const query = `
@@ -128,9 +145,9 @@ async function registerActivity(activityData) {
         VALUES (CURDATE(), ?, ?, 1, ?, NOW(), NOW(), JSON_ARRAY(?))
         ON DUPLICATE KEY UPDATE
             total_activities = total_activities + 1,
-            total_minutes = ?,
+            total_minutes = GREATEST(total_minutes, VALUES(total_minutes)),
             last_activity = NOW(),
-            activities_summary = JSON_ARRAY_APPEND(activities_summary, '$', ?)
+            activities_summary = JSON_ARRAY_APPEND(activities_summary, '$', VALUES(activities_summary))
     `;
 
     const params1 = [
@@ -144,13 +161,6 @@ async function registerActivity(activityData) {
     const params2 = [
         activityData.computer_id,
         activityData.computer_name || 'Desconhecido',
-        activityData.total_minutes || 0,
-        JSON.stringify({
-            activity: activityData.current_activity,
-            window: activityData.active_window,
-            timestamp: new Date().toISOString(),
-            minutes: activityData.total_minutes
-        }),
         activityData.total_minutes || 0,
         JSON.stringify({
             activity: activityData.current_activity,
@@ -344,6 +354,7 @@ module.exports = {
     registerDevice,
     getDeviceById,
     getAllDevices,
+    getDeviceTodayMinutes,
     updateDevicesStatus,
 
     // Atividades

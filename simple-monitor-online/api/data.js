@@ -44,8 +44,10 @@ function getTodayKey() {
 async function addToHistory(data) {
     try {
         if (data.type === 'activity') {
-            await dao.registerActivity(data);
-            console.log(`📝 Atividade salva no MySQL: ${data.computer_name}`);
+            // Validar e corrigir dados de tempo antes de salvar
+            const validatedData = await validateTimeData(data);
+            await dao.registerActivity(validatedData);
+            console.log(`📝 Atividade salva no MySQL: ${validatedData.computer_name} - ${validatedData.total_minutes}min`);
         }
     } catch (error) {
         console.error('❌ Erro ao salvar no histórico MySQL:', error);
@@ -53,6 +55,68 @@ async function addToHistory(data) {
         console.log('⚠️ Usando fallback para memória local');
     }
 }
+
+// Função para validar dados de tempo e evitar inconsistências
+async function validateTimeData(data) {
+    try {
+        // Buscar minutos já registrados hoje para este dispositivo
+        const currentTodayMinutes = await dao.getDeviceTodayMinutes(data.computer_id);
+        const newMinutes = data.total_minutes || 0;
+        
+        if (currentTodayMinutes > 0) {
+            // Já existe registro para hoje - o tempo só pode crescer
+            if (newMinutes < currentTodayMinutes) {
+                console.log(`⚠️ Correção (tempo menor): ${data.computer_name} ${newMinutes}min -> ${currentTodayMinutes}min`);
+                data.total_minutes = currentTodayMinutes;
+            }
+            // Se a diferença for muito grande (mais de 2 horas), limitar incremento
+            else if (newMinutes - currentTodayMinutes > 120) {
+                const correctedMinutes = currentTodayMinutes + 120;
+                console.log(`⚠️ Correção (incremento grande): ${data.computer_name} ${newMinutes}min -> ${correctedMinutes}min`);
+                data.total_minutes = correctedMinutes;
+            }
+            else {
+                console.log(`✅ Tempo válido: ${data.computer_name} ${currentTodayMinutes}min -> ${newMinutes}min (+${newMinutes-currentTodayMinutes}min)`);
+            }
+        } else {
+            // Primeiro registro do dia
+            if (newMinutes > 600) { // Mais de 10 horas para início de dia é suspeito
+                console.log(`⚠️ Novo dia (valor alto): ${data.computer_name} ${newMinutes}min -> 30min`);
+                data.total_minutes = 30; // Começar com 30 minutos
+            } else {
+                console.log(`✅ Novo dia iniciado: ${data.computer_name} - ${newMinutes}min`);
+            }
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('❌ Erro na validação de tempo:', error);
+        return data; // Retorna dados originais se validação falhar
+    }
+}
+
+// Função para limpar dados do dia anterior e garantir reset diário
+async function cleanupDailyData() {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        console.log(`🧹 Executando limpeza diária para ${today}`);
+        
+        // Atualizar status de dispositivos offline
+        await dao.updateDevicesStatus();
+        
+        // Log de status
+        const stats = await dao.getSystemStats();
+        console.log(`📊 Status: ${stats.online_devices} online, ${stats.offline_devices} offline, ${stats.today_minutes}min hoje`);
+        
+    } catch (error) {
+        console.error('❌ Erro na limpeza diária:', error);
+    }
+}
+
+// Executar limpeza a cada hora
+setInterval(cleanupDailyData, 60 * 60 * 1000); // 1 hora
+// Executar limpeza no início também
+setTimeout(cleanupDailyData, 5000); // 5 segundos após iniciar
 
 // Função para registrar dispositivo (agora usa MySQL)
 async function registerDevice(deviceData) {
