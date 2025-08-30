@@ -56,54 +56,66 @@ async function addToHistory(data) {
     }
 }
 
+// Cache para rastrear último valor enviado pelo agente
+const lastAgentValues = new Map();
+
 // Função para validar dados de tempo e evitar inconsistências
 async function validateTimeData(data) {
     try {
         // Buscar minutos já registrados hoje para este dispositivo
         const currentTodayMinutes = await dao.getDeviceTodayMinutes(data.computer_id);
-        const newMinutes = data.total_minutes || 0;
+        const newAgentMinutes = data.total_minutes || 0;
+        const lastAgentMinutes = lastAgentValues.get(data.computer_id) || 0;
 
         if (currentTodayMinutes > 0) {
             // Já existe registro para hoje
             
-            // REGRA SIMPLES: Tempo só pode crescer gradualmente
-            if (newMinutes > currentTodayMinutes) {
-                const increment = newMinutes - currentTodayMinutes;
-                
-                // Se incremento é normal (até 5 minutos), aceitar
-                if (increment <= 5) {
-                    console.log(`✅ Incremento normal: ${data.computer_name} ${currentTodayMinutes}min -> ${newMinutes}min (+${increment}min)`);
-                }
-                // Se incremento é muito grande, limitar a +5 minutos por vez
-                else {
-                    const limitedMinutes = currentTodayMinutes + 5;
-                    console.log(`⚠️ Incremento limitado: ${data.computer_name} ${newMinutes}min -> ${limitedMinutes}min (max +5min)`);
-                    data.total_minutes = limitedMinutes;
-                }
+            // Calcular incremento real do agente
+            let agentIncrement = 0;
+            
+            if (newAgentMinutes > lastAgentMinutes) {
+                // Agente incrementou normalmente
+                agentIncrement = newAgentMinutes - lastAgentMinutes;
+            } else if (newAgentMinutes < lastAgentMinutes && newAgentMinutes <= 10) {
+                // Possível reinicialização - usar valor do agente como incremento
+                agentIncrement = newAgentMinutes;
+                console.log(`🔄 Reinicialização detectada: ${data.computer_name} - incremento: ${agentIncrement}min`);
+            } else {
+                // Sem incremento ou valor estranho
+                agentIncrement = 0;
             }
-            // Se valor é menor ou igual, manter o atual
-            else {
-                console.log(`⚠️ Mantendo valor atual: ${data.computer_name} ${newMinutes}min -> ${currentTodayMinutes}min`);
-                data.total_minutes = currentTodayMinutes;
+            
+            // Limitar incremento máximo a 10 minutos por vez
+            if (agentIncrement > 10) {
+                agentIncrement = 10;
+                console.log(`⚠️ Incremento limitado a 10min: ${data.computer_name}`);
             }
+            
+            // Aplicar incremento ao total atual
+            const newTotalMinutes = currentTodayMinutes + agentIncrement;
+            data.total_minutes = newTotalMinutes;
+            
+            console.log(`✅ ${data.computer_name}: Agent ${lastAgentMinutes}min→${newAgentMinutes}min (+${agentIncrement}min) = Total ${newTotalMinutes}min`);
+            
         } else {
             // Primeiro registro do dia
-            if (newMinutes > 600) { // Mais de 10 horas para início de dia é suspeito
-                console.log(`⚠️ Novo dia (valor alto): ${data.computer_name} ${newMinutes}min -> 1min`);
+            if (newAgentMinutes > 600) { // Mais de 10 horas para início de dia é suspeito
+                console.log(`⚠️ Novo dia (valor alto): ${data.computer_name} ${newAgentMinutes}min -> 1min`);
                 data.total_minutes = 1;
             } else {
-                console.log(`✅ Novo dia iniciado: ${data.computer_name} - ${newMinutes}min`);
+                console.log(`✅ Novo dia iniciado: ${data.computer_name} - ${newAgentMinutes}min`);
             }
         }
+        
+        // Salvar último valor do agente para próxima comparação
+        lastAgentValues.set(data.computer_id, newAgentMinutes);
 
         return data;
     } catch (error) {
         console.error('❌ Erro na validação de tempo:', error);
         return data;
     }
-}
-
-// Função para limpar dados do dia anterior e garantir reset diário
+}// Função para limpar dados do dia anterior e garantir reset diário
 async function cleanupDailyData() {
     try {
         const today = new Date().toISOString().split('T')[0];
