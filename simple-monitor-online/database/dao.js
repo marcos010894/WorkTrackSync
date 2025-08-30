@@ -128,7 +128,7 @@ async function registerActivity(activityData) {
         VALUES (CURDATE(), ?, ?, 1, ?, NOW(), NOW(), JSON_ARRAY(?))
         ON DUPLICATE KEY UPDATE
             total_activities = total_activities + 1,
-            total_minutes = total_minutes + ?,
+            total_minutes = ?,
             last_activity = NOW(),
             activities_summary = JSON_ARRAY_APPEND(activities_summary, '$', ?)
     `;

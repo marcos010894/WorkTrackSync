@@ -28,7 +28,6 @@ class OnlineActivityMonitor:
         self.os_info = self.get_os_info()
         self.session_start_time = time.time()
         self.current_day = date.today()
-        self.last_sent_minutes = 0  # Para enviar apenas incrementos
         self.is_running = False
         
         print(f"🖥️ Monitor Online iniciado")
@@ -195,18 +194,10 @@ class OnlineActivityMonitor:
                 print(f"🗓️ Novo dia detectado: {today}")
                 self.current_day = today
                 self.session_start_time = time.time()
-                self.last_sent_minutes = 0
             
-            # Calcular tempo apenas da sessão atual do dia
+            # Calcular tempo total da sessão atual do dia
             current_time = time.time()
             session_minutes = int((current_time - self.session_start_time) / 60)
-            
-            # Calcular apenas o incremento de tempo (novos minutos)
-            new_minutes = session_minutes - self.last_sent_minutes
-            
-            # Só enviar se houver novos minutos
-            if new_minutes <= 0:
-                return True  # Sem novos minutos para enviar
             
             # Obter atividade atual
             activity = self.get_current_activity()
@@ -215,7 +206,7 @@ class OnlineActivityMonitor:
             data = {
                 'type': 'activity',
                 'computer_id': self.computer_id,
-                'total_minutes': new_minutes,  # Apenas os novos minutos
+                'total_minutes': session_minutes,  # Tempo total da sessão do dia
                 'current_activity': activity,
                 'active_window': window_info['window_title'] if window_info else None,
                 'timestamp': datetime.now().isoformat()
@@ -225,8 +216,7 @@ class OnlineActivityMonitor:
                                    json=data, timeout=10)
             
             if response.status_code == 200:
-                self.last_sent_minutes = session_minutes  # Atualizar o último enviado
-                print(f"📊 {activity} - +{new_minutes}min (incremento) | Total sessão: {session_minutes}min")
+                print(f"📊 {activity} - {session_minutes}min (sessão hoje)")
                 return True
             else:
                 print(f"❌ Erro ao enviar atividade: {response.status_code}")
