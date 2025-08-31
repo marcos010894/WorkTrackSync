@@ -1,8 +1,8 @@
 {
-  "device_name": "MacBook Pro - Escritório",
-  "user_name": "Marcos Paulo",
-  "description": "Computador principal do escritório",
-  "department": "Desenvolvimento",
-  "location": "São Paulo",
-  "tags": ["desenvolvimento", "principal", "escritorio"]
+    "device_name": "MacBook Pro - Escritório",
+    "user_name": "Marcos Paulo",
+    "description": "Computador principal do escritório",
+    "department": "Desenvolvimento",
+    "location": "São Paulo",
+    "tags": ["desenvolvimento", "principal", "escritorio"]
 }
