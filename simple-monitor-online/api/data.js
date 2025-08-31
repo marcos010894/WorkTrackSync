@@ -42,25 +42,26 @@ function processHeartbeat(deviceId, activityData) {
 
     if (lastSeen) {
         const timeDiff = currentTime - lastSeen;
-        const minutesPassed = Math.floor(timeDiff / (60 * 1000)); // Converter para minutos
 
-        // SEMPRE INCREMENTAR 1 MINUTO A CADA HEARTBEAT (heartbeat = 60s)
-        // Se o heartbeat veio no tempo esperado (50-70s), incrementar 1min
-        if (timeDiff >= 50000 && timeDiff <= 120000) { // Entre 50s e 2min (tolerância)
+        // LÓGICA SIMPLIFICADA: Incrementar 1 minuto se passou pelo menos 40 segundos
+        // Isso evita heartbeats muito frequentes mas permite variação normal
+        if (timeDiff >= 40000) { // Pelo menos 40 segundos
             const accumulator = getDailyAccumulator(deviceId, today);
-            accumulator.minutes += 1; // SEMPRE +1min por heartbeat
+            accumulator.minutes += 1; // SEMPRE +1min por heartbeat válido
             accumulator.lastActivity = activityData;
 
-            console.log(`⏱️ Heartbeat OK: +1min para ${deviceId} (Total: ${accumulator.minutes}min) [${Math.round(timeDiff/1000)}s desde último]`);
+            console.log(`⏱️ Heartbeat: +1min para ${deviceId} (Total: ${accumulator.minutes}min) [${Math.round(timeDiff/1000)}s desde último]`);
 
             // Verificar se deve salvar no banco
             const minutesSinceLastSave = accumulator.minutes - accumulator.lastSave;
             if (minutesSinceLastSave >= 10) {
                 saveAccumulatedTime(deviceId, accumulator, minutesSinceLastSave);
             }
-        } else if (timeDiff > 120000) {
-            // Muito tempo sem heartbeat - possível desconexão
-            console.log(`⚠️ Heartbeat atrasado: ${Math.round(timeDiff/1000)}s - não incrementando`);
+
+            // Atualizar último heartbeat só quando incrementou
+            deviceLastSeen.set(deviceId, currentTime);
+        } else {
+            console.log(`⚠️ Heartbeat muito frequente: ${Math.round(timeDiff/1000)}s - ignorando`);
         }
     } else {
         // PRIMEIRO HEARTBEAT - incrementar 1 minuto automaticamente
@@ -69,10 +70,10 @@ function processHeartbeat(deviceId, activityData) {
         accumulator.lastActivity = activityData;
 
         console.log(`⏱️ Primeiro heartbeat: +1min para ${deviceId} (Total: ${accumulator.minutes}min)`);
-    }
 
-    // Atualizar último heartbeat
-    deviceLastSeen.set(deviceId, currentTime);
+        // Atualizar último heartbeat
+        deviceLastSeen.set(deviceId, currentTime);
+    }
 } // Função para salvar tempo acumulado no banco
 async function saveAccumulatedTime(deviceId, accumulator, minutesToSave) {
     try {
