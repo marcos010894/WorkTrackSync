@@ -16,7 +16,7 @@ from datetime import datetime, date
 import platform
 
 class OnlineActivityMonitor:
-    def __init__(self, server_url="https://simple-monitor-online-rj85utstg-marcos10895s-projects.vercel.app"):
+    def __init__(self, server_url="https://simple-monitor-online-5istj8g8b-marcos10895s-projects.vercel.app"):
         # Remover apenas /api no final se presente
         if server_url.endswith('/api'):
             self.server_url = server_url[:-4]
@@ -325,20 +325,6 @@ class OnlineActivityMonitor:
         except Exception as e:
             print(f"❌ Erro ao executar comando {action}: {e}")
 
-    def send_heartbeat(self):
-        """Enviar heartbeat para manter conexão"""
-        try:
-            data = {
-                'type': 'heartbeat',
-                'computer_id': self.computer_id,
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            requests.post(f'{self.server_url}/api/data', json=data, timeout=5)
-            
-        except Exception as e:
-            pass  # Heartbeat é opcional
-
     def monitor_loop(self):
         """Loop principal de monitoramento"""
         print("👁️ Iniciando monitoramento...")
@@ -374,24 +360,13 @@ class OnlineActivityMonitor:
         print("🚀 Iniciando monitor online...")
         
         try:
-            # Heartbeat em thread separada
-            heartbeat_thread = threading.Thread(target=self.heartbeat_loop)
-            heartbeat_thread.daemon = True
-            heartbeat_thread.start()
-            
-            # Loop principal
+            # Apenas loop principal - sem thread separada de heartbeat
             self.monitor_loop()
             
         except Exception as e:
             print(f"❌ Erro crítico: {e}")
             time.sleep(10)
             self.start()  # Reiniciar
-
-    def heartbeat_loop(self):
-        """Loop de heartbeat"""
-        while self.is_running:
-            self.send_heartbeat()
-            time.sleep(30)  # Heartbeat a cada 30 segundos
 
     def stop(self):
         """Parar o monitor"""
