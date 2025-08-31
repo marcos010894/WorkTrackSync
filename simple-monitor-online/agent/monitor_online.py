@@ -262,12 +262,19 @@ class OnlineActivityMonitor:
                 response = requests.post(f'{self.server_url}/api/data', 
                                        json=data, timeout=10)
                 
+                # Enviar também para WebSocket (tempo real)
+                try:
+                    requests.post(f'{self.server_url}/api/websocket', 
+                                json=data, timeout=5)
+                except:
+                    pass
+                
                 if response.status_code == 200:
                     # Atualizar apenas o contador local para debug
                     self.minutes_sent_today += 1
                     self.last_send_time = current_time
                     
-                    print(f"� Heartbeat enviado - {activity} (Heartbeats hoje: {self.minutes_sent_today})")
+                    print(f"💓 Heartbeat enviado - {activity} (Heartbeats hoje: {self.minutes_sent_today})")
                     return True
                 else:
                     print(f"❌ Erro ao enviar heartbeat: {response.status_code}")
