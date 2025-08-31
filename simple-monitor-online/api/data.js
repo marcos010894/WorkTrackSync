@@ -14,16 +14,26 @@ let activities = new Map();
 let dailyAccumulator = new Map(); // device_id -> { date, minutes, lastSave }
 let deviceLastSeen = new Map(); // device_id -> timestamp do último heartbeat
 
-// Função para obter/criar acumulador diário
-function getDailyAccumulator(deviceId, date) {
+// Função para obter/criar acumulador diário (CARREGA DO BANCO SE EXISTIR)
+async function getDailyAccumulator(deviceId, date) {
     const key = `${deviceId}_${date}`;
 
     if (!dailyAccumulator.has(key)) {
+        // CARREGAR TEMPO JÁ SALVO NO BANCO PARA CONTINUAR DE ONDE PAROU
+        let savedMinutes = 0;
+        try {
+            savedMinutes = await dao.getDeviceTodayMinutes(deviceId, date);
+            console.log(`🔄 Carregando tempo salvo do banco: ${deviceId} = ${savedMinutes}min`);
+        } catch (error) {
+            console.log(`🆕 Novo dispositivo/dia: ${deviceId} - iniciando em 0min`);
+            savedMinutes = 0;
+        }
+
         dailyAccumulator.set(key, {
             device_id: deviceId,
             date: date,
-            minutes: 0,
-            lastSave: 0,
+            minutes: savedMinutes, // INICIAR COM TEMPO JÁ SALVO
+            lastSave: savedMinutes, // ÚLTIMO SAVE É O VALOR ATUAL DO BANCO
             lastActivity: null
         });
     }
@@ -31,11 +41,57 @@ function getDailyAccumulator(deviceId, date) {
     return dailyAccumulator.get(key);
 }
 
+// Versão síncrona para uso em processHeartbeat
+function getDailyAccumulatorSync(deviceId, date) {
+    const key = `${deviceId}_${date}`;
+
+    if (!dailyAccumulator.has(key)) {
+        // Se não existe, criar com 0 e carregar async depois
+        dailyAccumulator.set(key, {
+            device_id: deviceId,
+            date: date,
+            minutes: 0,
+            lastSave: 0,
+            lastActivity: null,
+            needsLoad: true // Flag para carregar do banco
+        });
+    }
+
+    return dailyAccumulator.get(key);
+}
+
 // Função para incrementar tempo automaticamente baseado em heartbeats
-function processHeartbeat(deviceId, activityData) {
+async function processHeartbeat(deviceId, activityData) {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     const currentTime = now.getTime();
+
+    // Obter acumulador (carrega do banco se necessário)
+    const accumulator = getDailyAccumulatorSync(deviceId, today);
+
+    // Carregar do banco se necessário
+    if (accumulator.needsLoad) {
+        try {
+            const savedMinutes = await dao.getDeviceTodayMinutes(deviceId, today);
+
+            // VERIFICAR SE VALOR SALVO É ABSURDO (>16 horas = 960min)
+            if (savedMinutes > 960) {
+                console.log(`🚨 VALOR ABSURDO DETECTADO: ${deviceId} tinha ${savedMinutes}min (${Math.round(savedMinutes/60)}h). RESETANDO para 0.`);
+                await dao.resetDeviceDailyTime(deviceId);
+                accumulator.minutes = 0;
+                accumulator.lastSave = 0;
+            } else {
+                accumulator.minutes = savedMinutes;
+                accumulator.lastSave = savedMinutes;
+                console.log(`🔄 Tempo carregado do banco: ${deviceId} = ${savedMinutes}min`);
+            }
+
+            accumulator.needsLoad = false;
+        } catch (error) {
+            console.log(`🆕 Novo dispositivo/dia: ${deviceId} - iniciando em 0min`);
+            accumulator.needsLoad = false;
+        }
+    }
 
     // Obter último heartbeat
     const lastSeen = deviceLastSeen.get(deviceId);
@@ -43,10 +99,14 @@ function processHeartbeat(deviceId, activityData) {
     if (lastSeen) {
         const timeDiff = currentTime - lastSeen;
 
-        // LÓGICA SIMPLIFICADA: Incrementar 1 minuto se passou pelo menos 40 segundos
-        // Isso evita heartbeats muito frequentes mas permite variação normal
-        if (timeDiff >= 40000) { // Pelo menos 40 segundos
-            const accumulator = getDailyAccumulator(deviceId, today);
+        // VERIFICAR LIMITE MÁXIMO (máximo 16 horas por dia = 960 minutos)
+        if (accumulator.minutes >= 960) {
+            console.log(`🚨 LIMITE ATINGIDO: ${deviceId} já tem ${accumulator.minutes}min (16h). Parando incrementos.`);
+            return;
+        }
+
+        // LÓGICA SIMPLIFICADA: Incrementar 1 minuto para cada heartbeat (agente manda a cada 60s)
+        if (timeDiff >= 30000) { // Pelo menos 30 segundos para evitar duplicatas
             accumulator.minutes += 1; // SEMPRE +1min por heartbeat válido
             accumulator.lastActivity = activityData;
 
@@ -55,7 +115,7 @@ function processHeartbeat(deviceId, activityData) {
             // Verificar se deve salvar no banco
             const minutesSinceLastSave = accumulator.minutes - accumulator.lastSave;
             if (minutesSinceLastSave >= 10) {
-                saveAccumulatedTime(deviceId, accumulator, minutesSinceLastSave);
+                await saveAccumulatedTime(deviceId, accumulator, minutesSinceLastSave);
             }
 
             // Atualizar último heartbeat só quando incrementou
@@ -65,7 +125,6 @@ function processHeartbeat(deviceId, activityData) {
         }
     } else {
         // PRIMEIRO HEARTBEAT - incrementar 1 minuto automaticamente
-        const accumulator = getDailyAccumulator(deviceId, today);
         accumulator.minutes += 1;
         accumulator.lastActivity = activityData;
 
@@ -169,6 +228,98 @@ async function saveRemainingData() {
         console.log('✅ Dados restantes salvos com sucesso');
     } catch (error) {
         console.error('❌ Erro ao salvar dados restantes:', error);
+    }
+}
+
+// Função para resetar valores absurdos no banco
+async function resetAbsurdValues() {
+    try {
+        const query = `
+            SELECT device_id, total_minutes, date 
+            FROM daily_history 
+            WHERE total_minutes > 960 
+            ORDER BY total_minutes DESC
+        `;
+
+        const absurdValues = await dao.db.executeQuery(query);
+
+        if (absurdValues.length > 0) {
+            console.log(`🚨 Encontrados ${absurdValues.length} valores absurdos:`);
+
+            for (const record of absurdValues) {
+                const hours = Math.round(record.total_minutes / 60);
+                console.log(`   - ${record.device_id}: ${record.total_minutes}min (${hours}h) em ${record.date}`);
+
+                // Resetar para 0
+                await dao.resetDeviceDailyTime(record.device_id);
+            }
+
+            // Limpar acumuladores em memória também
+            dailyAccumulator.clear();
+
+            console.log(`✅ ${absurdValues.length} registros resetados para 0min`);
+            return { reset: absurdValues.length };
+        } else {
+            console.log(`✅ Nenhum valor absurdo encontrado`);
+            return { reset: 0 };
+        }
+
+    } catch (error) {
+        console.error('❌ Erro ao resetar valores absurdos:', error);
+        throw error;
+    }
+}
+
+// Função para zerar COMPLETAMENTE banco e cache
+async function resetEverything() {
+    try {
+        console.log('🚨 INICIANDO RESET COMPLETO DO SISTEMA...');
+
+        // 1. Limpar cache em memória
+        computers.clear();
+        activities.clear();
+        dailyAccumulator.clear();
+        deviceLastSeen.clear();
+
+        console.log('✅ Cache limpo');
+
+        // 2. Zerar tabela daily_history
+        const deleteHistoryQuery = 'DELETE FROM daily_history';
+        await db.executeQuery(deleteHistoryQuery);
+        console.log('✅ Tabela daily_history zerada');
+
+        // 3. Resetar contadores dos dispositivos
+        const resetDevicesQuery = `
+            UPDATE devices 
+            SET total_sessions = 0, 
+                is_online = FALSE,
+                last_seen = '1970-01-01 00:00:00'
+        `;
+        await db.executeQuery(resetDevicesQuery);
+        console.log('✅ Dispositivos resetados');
+
+        // 4. Opcional: Limpar dispositivos de teste (IDs com timestamp)
+        const cleanTestQuery = `
+            DELETE FROM devices 
+            WHERE id REGEXP '^[a-z]+-[0-9]+$' 
+            OR id LIKE '%test%' 
+            OR id LIKE '%unknown%'
+        `;
+        await db.executeQuery(cleanTestQuery);
+        console.log('✅ Dispositivos de teste removidos');
+
+        console.log('🎉 RESET COMPLETO FINALIZADO!');
+
+        return {
+            success: true,
+            message: 'Sistema completamente resetado',
+            clearedTables: ['daily_history', 'devices'],
+            clearedCache: ['computers', 'activities', 'dailyAccumulator', 'deviceLastSeen']
+        };
+
+    } catch (error) {
+        console.error('❌ Erro no reset completo:', error);
+        throw error;
     }
 }
 
@@ -647,7 +798,7 @@ async function handleHeartbeat(data) {
         }
 
         // SERVIDOR CONTROLA O TEMPO - processar heartbeat para incrementar minutos
-        processHeartbeat(data.computer_id, {
+        await processHeartbeat(data.computer_id, {
             current_activity: data.current_activity,
             active_window: data.active_window,
             timestamp: data.timestamp
@@ -682,9 +833,9 @@ async function handleHeartbeat(data) {
             computer.os_info = data.os_info || computer.os_info;
         }
 
-        // Obter tempo acumulado pelo servidor
+        // Obter tempo acumulado pelo servidor (CARREGANDO DO BANCO SE NECESSÁRIO)
         const today = new Date().toISOString().split('T')[0];
-        const accumulator = getDailyAccumulator(data.computer_id, today);
+        const accumulator = await getDailyAccumulator(data.computer_id, today);
         computer.total_time = accumulator.minutes;
 
         computers.set(data.computer_id, computer);
@@ -821,6 +972,14 @@ module.exports = async function handler(req, res) {
 
                 case 'cleanup_test_devices':
                     await dao.cleanTestDevices();
+                    break;
+
+                case 'reset_absurd_values':
+                    await resetAbsurdValues();
+                    break;
+
+                case 'reset_all':
+                    await resetEverything();
                     break;
 
                 default:
