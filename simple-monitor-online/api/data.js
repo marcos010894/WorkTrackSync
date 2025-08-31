@@ -10,8 +10,9 @@ const db = require('../database/connection');
 let computers = new Map();
 let activities = new Map();
 
-// NOVO: Acumulador de minutos em memória
+// NOVO: Acumulador de minutos em memória + controle de tempo pelo servidor
 let dailyAccumulator = new Map(); // device_id -> { date, minutes, lastSave }
+let deviceLastSeen = new Map(); // device_id -> timestamp do último heartbeat
 
 // Função para obter/criar acumulador diário
 function getDailyAccumulator(deviceId, date) {
@@ -28,6 +29,59 @@ function getDailyAccumulator(deviceId, date) {
     }
 
     return dailyAccumulator.get(key);
+}
+
+// Função para incrementar tempo automaticamente baseado em heartbeats
+function processHeartbeat(deviceId, activityData) {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentTime = now.getTime();
+
+    // Obter último heartbeat
+    const lastSeen = deviceLastSeen.get(deviceId);
+
+    if (lastSeen) {
+        const timeDiff = currentTime - lastSeen;
+        const minutesPassed = Math.floor(timeDiff / (60 * 1000)); // Converter para minutos
+
+        // Se passou pelo menos 1 minuto, incrementar
+        if (minutesPassed >= 1 && minutesPassed <= 3) { // Máximo 3min para evitar saltos
+            const accumulator = getDailyAccumulator(deviceId, today);
+            accumulator.minutes += minutesPassed;
+            accumulator.lastActivity = activityData;
+
+            console.log(`⏱️ Servidor incrementou: +${minutesPassed}min para ${deviceId} (Total: ${accumulator.minutes}min)`);
+
+            // Verificar se deve salvar no banco
+            const minutesSinceLastSave = accumulator.minutes - accumulator.lastSave;
+            if (minutesSinceLastSave >= 10) {
+                saveAccumulatedTime(deviceId, accumulator, minutesSinceLastSave);
+            }
+        }
+    }
+
+    // Atualizar último heartbeat
+    deviceLastSeen.set(deviceId, currentTime);
+}
+
+// Função para salvar tempo acumulado no banco
+async function saveAccumulatedTime(deviceId, accumulator, minutesToSave) {
+    try {
+        console.log(`💾 Salvando ${minutesToSave}min no banco: ${deviceId}`);
+
+        await dao.addIncrementalTime(
+            deviceId,
+            minutesToSave,
+            accumulator.lastActivity || {},
+            accumulator.date
+        );
+
+        accumulator.lastSave = accumulator.minutes;
+        console.log(`✅ ${minutesToSave}min salvos. Total: ${accumulator.minutes}min, Salvos: ${accumulator.lastSave}min`);
+
+    } catch (error) {
+        console.error('❌ Erro ao salvar tempo acumulado:', error);
+    }
 }
 
 // Função para limpar acumuladores de dias anteriores
@@ -562,26 +616,64 @@ async function handleLegacyActivity(data) {
 
 async function handleHeartbeat(data) {
     try {
-        // Atualizar último acesso no MySQL via cache
-        const computer = computers.get(data.computer_id);
-        if (computer) {
-            computer.last_seen = new Date();
-            computer.status = 'online';
-            computers.set(data.computer_id, computer);
+        console.log(`💓 Heartbeat recebido: ${data.computer_id} - ${data.current_activity}`);
 
-            // Registrar dispositivo se não existir
-            if (!computer.registered_in_mysql) {
-                await registerDevice({
-                    computer_id: data.computer_id,
-                    computer_name: computer.computer_name,
-                    user_name: computer.user_name,
-                    os_info: computer.os_info
-                });
-                computer.registered_in_mysql = true;
-            }
+        // Limpar acumuladores antigos
+        cleanOldAccumulators();
+
+        // Registrar/atualizar dispositivo com dados do heartbeat
+        await dao.registerDevice({
+            computer_id: data.computer_id,
+            computer_name: data.computer_name,
+            user_name: data.user_name,
+            os_info: data.os_info
+        });
+
+        // SERVIDOR CONTROLA O TEMPO - processar heartbeat para incrementar minutos
+        processHeartbeat(data.computer_id, {
+            current_activity: data.current_activity,
+            active_window: data.active_window,
+            timestamp: data.timestamp
+        });
+
+        // Atualizar cache para dashboard em tempo real
+        const computer = computers.get(data.computer_id) || {
+            id: data.computer_id,
+            computer_name: data.computer_name,
+            user_name: data.user_name,
+            os_info: data.os_info,
+            last_seen: new Date(),
+            status: 'online',
+            total_time: 0
+        };
+
+        computer.current_activity = data.current_activity;
+        computer.active_window = data.active_window;
+        computer.last_seen = new Date();
+        computer.status = 'online';
+
+        // Obter tempo acumulado pelo servidor
+        const today = new Date().toISOString().split('T')[0];
+        const accumulator = getDailyAccumulator(data.computer_id, today);
+        computer.total_time = accumulator.minutes;
+
+        computers.set(data.computer_id, computer);
+
+        // Manter atividades recentes
+        let computerActivities = activities.get(data.computer_id) || [];
+        computerActivities.push({
+            timestamp: new Date(),
+            activity: data.current_activity,
+            window: data.active_window
+        });
+
+        if (computerActivities.length > 20) {
+            computerActivities.splice(0, computerActivities.length - 20);
         }
+        activities.set(data.computer_id, computerActivities);
 
-        console.log(`💓 Heartbeat: ${data.computer_id}`);
+        console.log(`✅ ${data.computer_name}: ${accumulator.minutes}min acumulados (Servidor controla tempo)`);
+
     } catch (error) {
         console.error('❌ Erro no heartbeat:', error);
     }

@@ -42,7 +42,7 @@ class OnlineActivityMonitor:
         print(f"💻 Computador: {self.computer_name}")
         print(f"👤 Usuário: {self.user_name}")
         print(f"🆔 ID: {self.computer_id}")
-        print(f"⏰ Sistema: Incrementos de 1min a cada 60 segundos")
+        print(f"💓 Sistema: Heartbeat a cada 60s (servidor controla tempo)")
 
     def load_device_config(self):
         """Carregar configuração personalizada do dispositivo"""
@@ -224,7 +224,7 @@ class OnlineActivityMonitor:
             return False
 
     def send_activity(self):
-        """Enviar incremento de 1 minuto para o servidor"""
+        """Enviar heartbeat simples para o servidor"""
         try:
             now = datetime.now()
             today = now.date()
@@ -236,48 +236,47 @@ class OnlineActivityMonitor:
                 self.current_day = today
                 self.minutes_sent_today = 0
                 self.last_send_time = current_time
-                print(f"🔄 Reiniciando contagem para novo dia")
+                print(f"🔄 Reiniciando para novo dia")
             
             # Verificar se passou pelo menos 60 segundos desde o último envio
             time_diff = current_time - self.last_send_time
             
             if time_diff >= 60:  # 60 segundos = 1 minuto
-                # Obter atividade atual
+                # Obter apenas atividade atual (opcional)
                 activity = self.get_current_activity()
                 window_info = self.get_active_window()
                 
-                # ENVIAR APENAS +1 MINUTO (sem total, sem cálculos complexos)
+                # ENVIAR APENAS HEARTBEAT - servidor controla o tempo
                 data = {
-                    'type': 'activity',
+                    'type': 'heartbeat',
                     'computer_id': self.computer_id,
                     'computer_name': self.computer_name,
                     'user_name': self.user_name,
                     'os_info': self.os_info,
-                    'increment_minutes': 1,  # SEMPRE 1 minuto
                     'current_activity': activity,
                     'active_window': window_info['window_title'] if window_info else None,
                     'timestamp': now.isoformat(),
-                    'day_date': today.isoformat()
+                    'is_active': True
                 }
                 
                 response = requests.post(f'{self.server_url}/api/data', 
                                        json=data, timeout=10)
                 
                 if response.status_code == 200:
-                    # Atualizar apenas o contador local
+                    # Atualizar apenas o contador local para debug
                     self.minutes_sent_today += 1
                     self.last_send_time = current_time
                     
-                    print(f"📊 +1min enviado - {activity} (Enviados hoje: {self.minutes_sent_today}min)")
+                    print(f"� Heartbeat enviado - {activity} (Heartbeats hoje: {self.minutes_sent_today})")
                     return True
                 else:
-                    print(f"❌ Erro ao enviar: {response.status_code}")
+                    print(f"❌ Erro ao enviar heartbeat: {response.status_code}")
                     return False
             
             return True  # Ainda não passou 1 minuto
                 
         except Exception as e:
-            print(f"❌ Erro ao enviar atividade: {e}")
+            print(f"❌ Erro ao enviar heartbeat: {e}")
             return False
 
     def check_commands(self):
@@ -343,7 +342,7 @@ class OnlineActivityMonitor:
     def monitor_loop(self):
         """Loop principal de monitoramento"""
         print("👁️ Iniciando monitoramento...")
-        print("⏰ Enviando incrementos de 1 minuto a cada minuto")
+        print("💓 Enviando heartbeat a cada minuto (servidor controla tempo)")
         
         # Registrar computador
         if not self.register():
@@ -353,13 +352,13 @@ class OnlineActivityMonitor:
         
         while self.is_running:
             try:
-                # Enviar atividade (incremento de 1 minuto)
+                # Enviar heartbeat (servidor incrementa tempo automaticamente)
                 self.send_activity()
                 
                 # Verificar comandos
                 self.check_commands()
                 
-                # Aguardar 60 segundos para próxima verificação (1 minuto)
+                # Aguardar 60 segundos para próximo heartbeat
                 time.sleep(60)
                 
             except KeyboardInterrupt:
