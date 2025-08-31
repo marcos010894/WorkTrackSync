@@ -31,10 +31,10 @@ class OnlineActivityMonitor:
         self.user_name = self.get_user_name()
         self.os_info = self.get_os_info()
         
-        # Controle de tempo - agora baseado em minutos incrementais
+        # Controle de tempo simplificado
         self.current_day = date.today()
-        self.last_minute_sent = 0  # Último minuto enviado
-        self.start_of_day = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        self.minutes_sent_today = 0  # Contador simples de minutos enviados hoje
+        self.last_send_time = time.time()  # Último momento em que enviou
         self.is_running = False
         
         print(f"🖥️ Monitor Online iniciado")
@@ -42,6 +42,7 @@ class OnlineActivityMonitor:
         print(f"💻 Computador: {self.computer_name}")
         print(f"👤 Usuário: {self.user_name}")
         print(f"🆔 ID: {self.computer_id}")
+        print(f"⏰ Sistema: Incrementos de 1min a cada 60 segundos")
 
     def load_device_config(self):
         """Carregar configuração personalizada do dispositivo"""
@@ -227,31 +228,32 @@ class OnlineActivityMonitor:
         try:
             now = datetime.now()
             today = now.date()
+            current_time = time.time()
             
             # Verificar se é um novo dia
             if today != self.current_day:
                 print(f"🗓️ Novo dia detectado: {today}")
                 self.current_day = today
-                self.start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                self.last_minute_sent = 0
+                self.minutes_sent_today = 0
+                self.last_send_time = current_time
+                print(f"🔄 Reiniciando contagem para novo dia")
             
-            # Calcular quantos minutos se passaram desde o início do dia
-            time_since_start = now - self.start_of_day
-            current_minute = int(time_since_start.total_seconds() / 60)
+            # Verificar se passou pelo menos 60 segundos desde o último envio
+            time_diff = current_time - self.last_send_time
             
-            # Verificar se um novo minuto se passou
-            if current_minute > self.last_minute_sent:
-                # Enviar incremento de 1 minuto para cada minuto que passou
-                minutes_to_send = current_minute - self.last_minute_sent
-                
+            if time_diff >= 60:  # 60 segundos = 1 minuto
                 # Obter atividade atual
                 activity = self.get_current_activity()
                 window_info = self.get_active_window()
                 
+                # ENVIAR APENAS +1 MINUTO (sem total, sem cálculos complexos)
                 data = {
                     'type': 'activity',
                     'computer_id': self.computer_id,
-                    'increment_minutes': 1,  # Sempre envia 1 minuto por vez
+                    'computer_name': self.computer_name,
+                    'user_name': self.user_name,
+                    'os_info': self.os_info,
+                    'increment_minutes': 1,  # SEMPRE 1 minuto
                     'current_activity': activity,
                     'active_window': window_info['window_title'] if window_info else None,
                     'timestamp': now.isoformat(),
@@ -262,14 +264,17 @@ class OnlineActivityMonitor:
                                        json=data, timeout=10)
                 
                 if response.status_code == 200:
-                    self.last_minute_sent = current_minute
-                    print(f"📊 +1min - {activity} (Total: {current_minute}min hoje)")
+                    # Atualizar apenas o contador local
+                    self.minutes_sent_today += 1
+                    self.last_send_time = current_time
+                    
+                    print(f"📊 +1min enviado - {activity} (Enviados hoje: {self.minutes_sent_today}min)")
                     return True
                 else:
-                    print(f"❌ Erro ao enviar atividade: {response.status_code}")
+                    print(f"❌ Erro ao enviar: {response.status_code}")
                     return False
             
-            return True  # Não precisa enviar ainda
+            return True  # Ainda não passou 1 minuto
                 
         except Exception as e:
             print(f"❌ Erro ao enviar atividade: {e}")

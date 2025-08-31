@@ -10,6 +10,44 @@ const db = require('../database/connection');
 let computers = new Map();
 let activities = new Map();
 
+// NOVO: Acumulador de minutos em memória
+let dailyAccumulator = new Map(); // device_id -> { date, minutes, lastSave }
+
+// Função para obter/criar acumulador diário
+function getDailyAccumulator(deviceId, date) {
+    const key = `${deviceId}_${date}`;
+
+    if (!dailyAccumulator.has(key)) {
+        dailyAccumulator.set(key, {
+            device_id: deviceId,
+            date: date,
+            minutes: 0,
+            lastSave: 0,
+            lastActivity: null
+        });
+    }
+
+    return dailyAccumulator.get(key);
+}
+
+// Função para limpar acumuladores de dias anteriores
+function cleanOldAccumulators() {
+    const today = new Date().toISOString().split('T')[0];
+    const keysToDelete = [];
+
+    dailyAccumulator.forEach((acc, key) => {
+        if (acc.date !== today) {
+            keysToDelete.push(key);
+        }
+    });
+
+    keysToDelete.forEach(key => {
+        const acc = dailyAccumulator.get(key);
+        console.log(`🧹 Removendo acumulador antigo: ${acc.device_id} - ${acc.date} (${acc.minutes}min)`);
+        dailyAccumulator.delete(key);
+    });
+}
+
 // Inicializar conexão MySQL
 db.initializePool();
 
@@ -19,12 +57,17 @@ async function initializeDatabase() {
         const isConnected = await db.testConnection();
         if (isConnected) {
             console.log('✅ Conexão MySQL estabelecida com sucesso');
-            
+
             // Criar tabela de histórico diário
             await dao.createDailyHistoryTable();
-            
+
             // Atualizar status dos dispositivos na inicialização
             await dao.updateDevicesStatus();
+
+            // Limpar acumuladores antigos na inicialização
+            cleanOldAccumulators();
+
+            console.log('🔧 Sistema de acumulação em memória inicializado');
         } else {
             console.warn('⚠️ Falha na conexão MySQL - usando cache temporário');
         }
@@ -32,6 +75,58 @@ async function initializeDatabase() {
         console.error('❌ Erro na inicialização do banco:', error);
     }
 }
+
+// Função para salvar dados restantes (chamada antes de shutdown)
+async function saveRemainingData() {
+    try {
+        console.log('💾 Salvando dados restantes no banco...');
+
+        for (const [key, accumulator] of dailyAccumulator.entries()) {
+            const remainingMinutes = accumulator.minutes - accumulator.lastSave;
+
+            if (remainingMinutes > 0) {
+                console.log(`💾 Salvando ${remainingMinutes}min restantes: ${accumulator.device_id}`);
+
+                await dao.addIncrementalTime(
+                    accumulator.device_id,
+                    remainingMinutes,
+                    accumulator.lastActivity || {},
+                    accumulator.date
+                );
+
+                accumulator.lastSave = accumulator.minutes;
+            }
+        }
+
+        console.log('✅ Dados restantes salvos com sucesso');
+    } catch (error) {
+        console.error('❌ Erro ao salvar dados restantes:', error);
+    }
+}
+
+// Salvar dados restantes a cada 5 minutos (backup)
+setInterval(async() => {
+    try {
+        for (const [key, accumulator] of dailyAccumulator.entries()) {
+            const remainingMinutes = accumulator.minutes - accumulator.lastSave;
+
+            if (remainingMinutes >= 5) { // Backup a cada 5 minutos
+                console.log(`🔄 Backup: Salvando ${remainingMinutes}min: ${accumulator.device_id}`);
+
+                await dao.addIncrementalTime(
+                    accumulator.device_id,
+                    remainingMinutes,
+                    accumulator.lastActivity || {},
+                    accumulator.date
+                );
+
+                accumulator.lastSave = accumulator.minutes;
+            }
+        }
+    } catch (error) {
+        console.error('❌ Erro no backup automático:', error);
+    }
+}, 5 * 60 * 1000); // 5 minutos
 
 // Inicializar na primeira execução
 initializeDatabase();
@@ -192,10 +287,22 @@ async function getAllDevices() {
     try {
         await updateDeviceStatus();
         const devices = await dao.getAllDevices();
+        const today = new Date().toISOString().split('T')[0];
 
-        // Combinar com dados em cache para atividade atual
+        // Combinar com dados em cache e acumulador para atividade atual
         return devices.map(device => {
             const currentData = computers.get(device.id);
+
+            // Obter dados do acumulador em tempo real
+            const accumulatorKey = `${device.id}_${today}`;
+            const accumulator = dailyAccumulator.get(accumulatorKey);
+            const realtimeMinutes = accumulator ? accumulator.minutes : 0;
+
+            // Converter para formato de horas
+            const hours = Math.floor(realtimeMinutes / 60);
+            const mins = realtimeMinutes % 60;
+            const timeDisplay = hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
+
             return {
                 id: device.id,
                 name: device.name,
@@ -206,7 +313,10 @@ async function getAllDevices() {
                 total_sessions: device.total_sessions,
                 is_online: device.is_online,
                 current_activity: currentData ? currentData.current_activity : (device.is_online ? 'Ativo' : 'Offline'),
-                today_minutes: device.today_minutes || 0,
+                today_minutes: realtimeMinutes, // Tempo em tempo real do acumulador
+                today_display: timeDisplay, // Formato legível
+                saved_minutes: accumulator ? accumulator.lastSave : 0, // Minutos já salvos no banco
+                pending_minutes: accumulator ? (accumulator.minutes - accumulator.lastSave) : 0, // Pendentes de salvamento
                 total_minutes_all_time: device.total_minutes_all_time || 0,
                 total_activities_all_time: device.total_activities_all_time || 0,
                 last_activity_time: device.last_seen
@@ -300,34 +410,53 @@ async function handleActivity(data) {
 // Nova função para atividades incrementais
 async function handleIncrementalActivity(data) {
     try {
-        console.log(`⏱️ Atividade incremental:`, {
-            device: data.computer_id,
-            increment: data.increment_minutes,
-            date: data.day_date,
-            activity: data.current_activity
+        console.log(`⏱️ +${data.increment_minutes}min recebido de ${data.computer_id}`);
+
+        // Limpar acumuladores antigos
+        cleanOldAccumulators();
+
+        // Obter acumulador do dia atual
+        const accumulator = getDailyAccumulator(data.computer_id, data.day_date);
+
+        // Adicionar 1 minuto ao acumulador em memória
+        accumulator.minutes += data.increment_minutes;
+        accumulator.lastActivity = {
+            activity: data.current_activity,
+            window: data.active_window,
+            timestamp: new Date().toISOString()
+        };
+
+        // Registrar/atualizar dispositivo
+        await dao.registerDevice({
+            computer_id: data.computer_id,
+            computer_name: data.computer_name,
+            user_name: data.user_name,
+            os_info: data.os_info
         });
 
-        // Atualizar informações do dispositivo
-        if (data.computer_name && data.computer_name !== 'undefined') {
-            await dao.updateDeviceInfo(data.computer_id, {
-                name: data.computer_name,
-                user_name: data.user_name,
-                os_info: data.os_info
-            });
+        // Verificar se deve salvar no banco (a cada 10 minutos acumulados)
+        const minutesSinceLastSave = accumulator.minutes - accumulator.lastSave;
+
+        if (minutesSinceLastSave >= 10) {
+            console.log(`💾 Salvando ${minutesSinceLastSave}min no banco: ${data.computer_id}`);
+
+            // Salvar incremento no banco
+            await dao.addIncrementalTime(
+                data.computer_id,
+                minutesSinceLastSave, {
+                    current_activity: data.current_activity,
+                    active_window: data.active_window
+                },
+                data.day_date
+            );
+
+            // Atualizar último salvamento
+            accumulator.lastSave = accumulator.minutes;
+
+            console.log(`✅ ${minutesSinceLastSave}min salvos no banco. Total hoje: ${accumulator.minutes}min`);
         }
 
-        // Adicionar tempo incremental ao histórico diário
-        await dao.addIncrementalTime(
-            data.computer_id,
-            data.increment_minutes,
-            {
-                current_activity: data.current_activity,
-                active_window: data.active_window
-            },
-            data.day_date
-        );
-
-        // Atualizar cache local para dashboard em tempo real
+        // Atualizar cache para dashboard em tempo real
         const computer = computers.get(data.computer_id) || {
             id: data.computer_id,
             computer_name: data.computer_name,
@@ -342,14 +471,11 @@ async function handleIncrementalActivity(data) {
         computer.active_window = data.active_window;
         computer.last_seen = new Date();
         computer.status = 'online';
-
-        // Buscar tempo total do dia atual
-        const todayTime = await dao.getCurrentDayTime(data.computer_id, data.day_date);
-        computer.total_time = todayTime;
+        computer.total_time = accumulator.minutes; // Tempo acumulado em memória
 
         computers.set(data.computer_id, computer);
 
-        // Manter atividades no cache
+        // Manter atividades recentes no cache
         let computerActivities = activities.get(data.computer_id) || [];
         computerActivities.push({
             timestamp: new Date(),
@@ -362,10 +488,14 @@ async function handleIncrementalActivity(data) {
         if (computerActivities.length > 20) {
             computerActivities.splice(0, computerActivities.length - 20);
         }
-
         activities.set(data.computer_id, computerActivities);
 
-        console.log(`✅ +${data.increment_minutes}min → ${data.computer_name} (Total hoje: ${todayTime}min)`);
+        // Converter minutos para formato horas:minutos
+        const hours = Math.floor(accumulator.minutes / 60);
+        const mins = accumulator.minutes % 60;
+        const timeFormat = hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
+
+        console.log(`🎯 ${data.computer_name}: +1min → ${timeFormat} (Próximo save: ${10 - minutesSinceLastSave}min)`);
 
     } catch (error) {
         console.error('❌ Erro na atividade incremental:', error);

@@ -11,7 +11,7 @@ if (!db.pool) {
     db.initializePool();
 }
 
-module.exports = async (req, res) => {
+module.exports = async(req, res) => {
     // Headers CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
             if (device_id) {
                 // Histórico de um dispositivo específico
                 const history = await dao.getDeviceHistory(device_id, parseInt(limit));
-                
+
                 return res.status(200).json({
                     success: true,
                     device_id: device_id,
@@ -39,14 +39,14 @@ module.exports = async (req, res) => {
             } else {
                 // Histórico geral de todos os dispositivos
                 const allHistory = await dao.getAllDevicesHistory(parseInt(limit));
-                
+
                 // Agrupar por data para melhor visualização
                 const groupedByDate = {};
                 const dailySummary = {};
-                
+
                 allHistory.forEach(record => {
                     const dateKey = record.date.toISOString().split('T')[0];
-                    
+
                     // Agrupar registros por data
                     if (!groupedByDate[dateKey]) {
                         groupedByDate[dateKey] = [];
@@ -58,9 +58,9 @@ module.exports = async (req, res) => {
                             devices: []
                         };
                     }
-                    
+
                     groupedByDate[dateKey].push(record);
-                    
+
                     // Calcular resumo diário
                     dailySummary[dateKey].total_devices++;
                     dailySummary[dateKey].total_minutes += record.total_minutes;
