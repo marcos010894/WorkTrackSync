@@ -44,27 +44,36 @@ function processHeartbeat(deviceId, activityData) {
         const timeDiff = currentTime - lastSeen;
         const minutesPassed = Math.floor(timeDiff / (60 * 1000)); // Converter para minutos
 
-        // Se passou pelo menos 1 minuto, incrementar
-        if (minutesPassed >= 1 && minutesPassed <= 3) { // Máximo 3min para evitar saltos
+        // SEMPRE INCREMENTAR 1 MINUTO A CADA HEARTBEAT (heartbeat = 60s)
+        // Se o heartbeat veio no tempo esperado (50-70s), incrementar 1min
+        if (timeDiff >= 50000 && timeDiff <= 120000) { // Entre 50s e 2min (tolerância)
             const accumulator = getDailyAccumulator(deviceId, today);
-            accumulator.minutes += minutesPassed;
+            accumulator.minutes += 1; // SEMPRE +1min por heartbeat
             accumulator.lastActivity = activityData;
 
-            console.log(`⏱️ Servidor incrementou: +${minutesPassed}min para ${deviceId} (Total: ${accumulator.minutes}min)`);
+            console.log(`⏱️ Heartbeat OK: +1min para ${deviceId} (Total: ${accumulator.minutes}min) [${Math.round(timeDiff/1000)}s desde último]`);
 
             // Verificar se deve salvar no banco
             const minutesSinceLastSave = accumulator.minutes - accumulator.lastSave;
             if (minutesSinceLastSave >= 10) {
                 saveAccumulatedTime(deviceId, accumulator, minutesSinceLastSave);
             }
+        } else if (timeDiff > 120000) {
+            // Muito tempo sem heartbeat - possível desconexão
+            console.log(`⚠️ Heartbeat atrasado: ${Math.round(timeDiff/1000)}s - não incrementando`);
         }
+    } else {
+        // PRIMEIRO HEARTBEAT - incrementar 1 minuto automaticamente
+        const accumulator = getDailyAccumulator(deviceId, today);
+        accumulator.minutes += 1;
+        accumulator.lastActivity = activityData;
+
+        console.log(`⏱️ Primeiro heartbeat: +1min para ${deviceId} (Total: ${accumulator.minutes}min)`);
     }
 
     // Atualizar último heartbeat
     deviceLastSeen.set(deviceId, currentTime);
-}
-
-// Função para salvar tempo acumulado no banco
+} // Função para salvar tempo acumulado no banco
 async function saveAccumulatedTime(deviceId, accumulator, minutesToSave) {
     try {
         console.log(`💾 Salvando ${minutesToSave}min no banco: ${deviceId}`);
@@ -84,7 +93,7 @@ async function saveAccumulatedTime(deviceId, accumulator, minutesToSave) {
     }
 }
 
-// Função para limpar acumuladores de dias anteriores
+// Função para limpar acumuladores de dias anteriores (MAS NÃO ZERA DISPOSITIVOS)
 function cleanOldAccumulators() {
     const today = new Date().toISOString().split('T')[0];
     const keysToDelete = [];
@@ -95,11 +104,15 @@ function cleanOldAccumulators() {
         }
     });
 
+    // APENAS remover acumuladores antigos, NÃO zerar dispositivos ativos
     keysToDelete.forEach(key => {
         const acc = dailyAccumulator.get(key);
         console.log(`🧹 Removendo acumulador antigo: ${acc.device_id} - ${acc.date} (${acc.minutes}min)`);
         dailyAccumulator.delete(key);
     });
+
+    // NÃO limpar cache de dispositivos - eles devem persistir
+    console.log(`📱 Mantendo ${computers.size} dispositivos em cache`);
 }
 
 // Inicializar conexão MySQL
@@ -621,13 +634,16 @@ async function handleHeartbeat(data) {
         // Limpar acumuladores antigos
         cleanOldAccumulators();
 
-        // Registrar/atualizar dispositivo com dados do heartbeat
-        await dao.registerDevice({
-            computer_id: data.computer_id,
-            computer_name: data.computer_name,
-            user_name: data.user_name,
-            os_info: data.os_info
-        });
+        // SEMPRE registrar/atualizar dispositivo com dados do heartbeat
+        if (data.computer_name && data.computer_name !== 'undefined') {
+            await dao.registerDevice({
+                computer_id: data.computer_id,
+                computer_name: data.computer_name,
+                user_name: data.user_name,
+                os_info: data.os_info
+            });
+            console.log(`📝 Dispositivo atualizado: ${data.computer_name}`);
+        }
 
         // SERVIDOR CONTROLA O TEMPO - processar heartbeat para incrementar minutos
         processHeartbeat(data.computer_id, {
@@ -636,21 +652,34 @@ async function handleHeartbeat(data) {
             timestamp: data.timestamp
         });
 
-        // Atualizar cache para dashboard em tempo real
-        const computer = computers.get(data.computer_id) || {
-            id: data.computer_id,
-            computer_name: data.computer_name,
-            user_name: data.user_name,
-            os_info: data.os_info,
-            last_seen: new Date(),
-            status: 'online',
-            total_time: 0
-        };
+        // Atualizar cache para dashboard em tempo real COM DADOS CORRETOS
+        let computer = computers.get(data.computer_id);
 
-        computer.current_activity = data.current_activity;
+        // Se não existe no cache OU se dados estão vazios, criar/atualizar
+        if (!computer || !computer.computer_name || computer.computer_name === 'Computador Desconhecido') {
+            computer = {
+                id: data.computer_id,
+                computer_name: data.computer_name || 'Computador Desconhecido',
+                user_name: data.user_name || 'Usuário Desconhecido',
+                os_info: data.os_info || 'Sistema Desconhecido',
+                last_seen: new Date(),
+                status: 'online',
+                total_time: 0
+            };
+        }
+
+        // Sempre atualizar atividade atual e status
+        computer.current_activity = data.current_activity || 'Ativo';
         computer.active_window = data.active_window;
         computer.last_seen = new Date();
         computer.status = 'online';
+
+        // Atualizar dados do dispositivo se vieram no heartbeat
+        if (data.computer_name && data.computer_name !== 'undefined') {
+            computer.computer_name = data.computer_name;
+            computer.user_name = data.user_name || computer.user_name;
+            computer.os_info = data.os_info || computer.os_info;
+        }
 
         // Obter tempo acumulado pelo servidor
         const today = new Date().toISOString().split('T')[0];
@@ -663,7 +692,7 @@ async function handleHeartbeat(data) {
         let computerActivities = activities.get(data.computer_id) || [];
         computerActivities.push({
             timestamp: new Date(),
-            activity: data.current_activity,
+            activity: data.current_activity || 'Ativo',
             window: data.active_window
         });
 
@@ -672,7 +701,7 @@ async function handleHeartbeat(data) {
         }
         activities.set(data.computer_id, computerActivities);
 
-        console.log(`✅ ${data.computer_name}: ${accumulator.minutes}min acumulados (Servidor controla tempo)`);
+        console.log(`✅ ${computer.computer_name}: ${accumulator.minutes}min acumulados (Servidor controla tempo)`);
 
     } catch (error) {
         console.error('❌ Erro no heartbeat:', error);
