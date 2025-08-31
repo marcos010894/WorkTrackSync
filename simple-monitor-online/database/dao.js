@@ -6,6 +6,35 @@
 const db = require('./connection');
 
 /**
+ * INICIALIZAÇÃO DE TABELAS
+ */
+
+// Criar tabela de histórico diário se não existir
+async function createDailyHistoryTable() {
+    const query = `
+        CREATE TABLE IF NOT EXISTS daily_history (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            device_id VARCHAR(100) NOT NULL,
+            date DATE NOT NULL,
+            total_minutes INT DEFAULT 0,
+            activities JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_device_date (device_id, date),
+            FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `;
+
+    try {
+        await db.executeQuery(query);
+        console.log('✅ Tabela daily_history criada/verificada');
+    } catch (error) {
+        console.error('❌ Erro ao criar tabela daily_history:', error);
+        throw error;
+    }
+}
+
+/**
  * DISPOSITIVOS
  */
 
@@ -399,7 +428,130 @@ async function cleanOldData() {
     }
 }
 
+/**
+ * HISTÓRICO DIÁRIO
+ */
+
+// Adicionar tempo incremental ao dia atual
+async function addIncrementalTime(deviceId, incrementMinutes, activityData, dayDate) {
+    const query = `
+        INSERT INTO daily_history (device_id, date, total_minutes, activities)
+        VALUES (?, ?, ?, JSON_ARRAY(?))
+        ON DUPLICATE KEY UPDATE
+            total_minutes = total_minutes + VALUES(total_minutes),
+            activities = JSON_ARRAY_APPEND(IFNULL(activities, JSON_ARRAY()), '$', ?),
+            updated_at = CURRENT_TIMESTAMP
+    `;
+
+    const activity = {
+        timestamp: new Date().toISOString(),
+        activity: activityData.current_activity || 'Ativo',
+        window: activityData.active_window || null,
+        minutes: incrementMinutes
+    };
+
+    const params = [
+        deviceId,
+        dayDate,
+        incrementMinutes,
+        JSON.stringify(activity),
+        JSON.stringify(activity)
+    ];
+
+    try {
+        await db.executeQuery(query, params);
+        console.log(`⏱️ +${incrementMinutes}min adicionado para ${deviceId} em ${dayDate}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao adicionar tempo incremental:', error);
+        throw error;
+    }
+}
+
+// Buscar tempo total do dia atual
+async function getCurrentDayTime(deviceId, dayDate) {
+    const query = `
+        SELECT total_minutes 
+        FROM daily_history 
+        WHERE device_id = ? AND date = ?
+    `;
+
+    try {
+        const results = await db.executeQuery(query, [deviceId, dayDate]);
+        return results[0] ? results[0].total_minutes : 0;
+    } catch (error) {
+        console.error('❌ Erro ao buscar tempo do dia atual:', error);
+        return 0;
+    }
+}
+
+// Buscar histórico completo de um dispositivo
+async function getDeviceHistory(deviceId, limit = 30) {
+    const query = `
+        SELECT date, total_minutes, activities, created_at, updated_at
+        FROM daily_history 
+        WHERE device_id = ? 
+        ORDER BY date DESC 
+        LIMIT ?
+    `;
+
+    try {
+        const results = await db.executeQuery(query, [deviceId, limit]);
+        return results.map(row => ({
+            date: row.date,
+            total_minutes: row.total_minutes,
+            total_hours: Math.floor(row.total_minutes / 60),
+            remaining_minutes: row.total_minutes % 60,
+            activities: row.activities ? JSON.parse(row.activities) : [],
+            created_at: row.created_at,
+            updated_at: row.updated_at
+        }));
+    } catch (error) {
+        console.error('❌ Erro ao buscar histórico do dispositivo:', error);
+        return [];
+    }
+}
+
+// Buscar histórico geral (todos os dispositivos)
+async function getAllDevicesHistory(limit = 100) {
+    const query = `
+        SELECT 
+            dh.date,
+            dh.device_id,
+            d.name as device_name,
+            d.user_name,
+            dh.total_minutes,
+            dh.activities,
+            dh.updated_at
+        FROM daily_history dh
+        JOIN devices d ON dh.device_id = d.id
+        ORDER BY dh.date DESC, dh.updated_at DESC
+        LIMIT ?
+    `;
+
+    try {
+        const results = await db.executeQuery(query, [limit]);
+        return results.map(row => ({
+            date: row.date,
+            device_id: row.device_id,
+            device_name: row.device_name,
+            user_name: row.user_name,
+            total_minutes: row.total_minutes,
+            total_hours: Math.floor(row.total_minutes / 60),
+            remaining_minutes: row.total_minutes % 60,
+            activities: row.activities ? JSON.parse(row.activities) : [],
+            updated_at: row.updated_at
+        }));
+    } catch (error) {
+        console.error('❌ Erro ao buscar histórico geral:', error);
+        return [];
+    }
+}
+
 module.exports = {
+    // Inicialização
+    createDailyHistoryTable,
+
     // Dispositivos
     registerDevice,
     getDeviceById,
@@ -413,7 +565,13 @@ module.exports = {
     registerActivity,
     getDeviceActivities,
 
-    // Histórico
+    // Histórico Diário
+    addIncrementalTime,
+    getCurrentDayTime,
+    getDeviceHistory,
+    getAllDevicesHistory,
+
+    // Histórico (original)
     getDailyHistory,
     getSystemStats,
 

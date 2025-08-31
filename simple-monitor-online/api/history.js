@@ -1,203 +1,110 @@
 /**
- * API para gerenciar histórico de atividades
- * Integrada com o data.js para compartilhar o mesmo armazenamento
+ * API para histórico diário
+ * Sistema de consulta de dados históricos por data
  */
 
-// Função para obter dados históricos compartilhados
-function getSharedHistoryData() {
-    // Tentar acessar dados compartilhados globalmente
-    if (global.sharedHistoryData && typeof global.sharedHistoryData === 'function') {
-        return global.sharedHistoryData();
-    }
+const dao = require('../database/dao');
+const db = require('../database/connection');
 
-    // Fallback: criar dados locais se não há dados compartilhados
-    let localHistory = new Map();
-
-    // Se não há dados, criar alguns exemplos para teste
-    if (localHistory.size === 0) {
-        const today = getTodayKey();
-        const yesterday = formatDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
-
-        // Dados de exemplo para hoje
-        localHistory.set(today, {
-            date: today,
-            computers: new Map([
-                ['test-computer-1', {
-                    computer_id: 'test-computer-1',
-                    computer_name: 'Computador Teste 1',
-                    user_name: 'Usuario Teste',
-                    os_info: 'Windows 11',
-                    total_minutes: 120,
-                    last_activity: 'Trabalhando em Documentos',
-                    last_seen: new Date().toISOString()
-                }]
-            ]),
-            totalActivities: 25,
-            activities: [{
-                computer_id: 'test-computer-1',
-                computer_name: 'Computador Teste 1',
-                activity: 'Trabalhando em Documentos',
-                window: 'Microsoft Word',
-                timestamp: new Date().toISOString(),
-                minutes: 120
-            }]
-        });
-
-        // Dados de exemplo para ontem
-        localHistory.set(yesterday, {
-            date: yesterday,
-            computers: new Map([
-                ['test-computer-1', {
-                    computer_id: 'test-computer-1',
-                    computer_name: 'Computador Teste 1',
-                    user_name: 'Usuario Teste',
-                    os_info: 'Windows 11',
-                    total_minutes: 180,
-                    last_activity: 'Navegando na Internet',
-                    last_seen: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-                }]
-            ]),
-            totalActivities: 30,
-            activities: []
-        });
-    }
-
-    return localHistory;
+// Inicializar conexão MySQL
+if (!db.pool) {
+    db.initializePool();
 }
 
-// Importar o mesmo armazenamento usado em data.js
-let dailyHistory = new Map();
-
-// Função para sincronizar com data.js (chamar quando necessário)
-function syncWithDataAPI() {
-    // Em um ambiente real, isso seria um banco de dados compartilhado
-    // Por agora, vamos usar uma abordagem simples
-    return dailyHistory;
-}
-
-function formatDate(date) {
-    return date.toISOString().split('T')[0];
-}
-
-function getTodayKey() {
-    return formatDate(new Date());
-}
-
-function verifyAuth(req) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return false;
-    }
-
-    const token = authHeader.substring(7);
-    return token && token.length > 10;
-}
-
-// Função para obter dados históricos (usa dados compartilhados ou cria exemplos)
-function getHistoryData() {
-    return getSharedHistoryData();
-}
-module.exports = async function handler(req, res) {
-    // CORS headers
+module.exports = async (req, res) => {
+    // Headers CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
-    // Verificar autenticação
-    if (!verifyAuth(req)) {
-        return res.status(401).json({
-            success: false,
-            message: 'Não autorizado'
-        });
-    }
-
     if (req.method === 'GET') {
-        // Obter dados históricos atualizados
-        const historyData = getHistoryData();
+        try {
+            const { device_id, limit = 30, date } = req.query;
 
-        const { date, days } = req.query;
-
-        if (date) {
-            // Buscar data específica
-            const dateData = historyData.get(date);
-
-            if (dateData) {
+            if (device_id) {
+                // Histórico de um dispositivo específico
+                const history = await dao.getDeviceHistory(device_id, parseInt(limit));
+                
                 return res.status(200).json({
                     success: true,
-                    date: date,
-                    data: {
-                        ...dateData,
-                        computers: Array.from(dateData.computers.values())
-                    }
+                    device_id: device_id,
+                    history: history,
+                    total_records: history.length,
+                    timestamp: new Date().toISOString()
                 });
             } else {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Nenhum dado encontrado para esta data'
+                // Histórico geral de todos os dispositivos
+                const allHistory = await dao.getAllDevicesHistory(parseInt(limit));
+                
+                // Agrupar por data para melhor visualização
+                const groupedByDate = {};
+                const dailySummary = {};
+                
+                allHistory.forEach(record => {
+                    const dateKey = record.date.toISOString().split('T')[0];
+                    
+                    // Agrupar registros por data
+                    if (!groupedByDate[dateKey]) {
+                        groupedByDate[dateKey] = [];
+                        dailySummary[dateKey] = {
+                            date: dateKey,
+                            total_devices: 0,
+                            total_minutes: 0,
+                            total_hours: 0,
+                            devices: []
+                        };
+                    }
+                    
+                    groupedByDate[dateKey].push(record);
+                    
+                    // Calcular resumo diário
+                    dailySummary[dateKey].total_devices++;
+                    dailySummary[dateKey].total_minutes += record.total_minutes;
+                    dailySummary[dateKey].total_hours = Math.floor(dailySummary[dateKey].total_minutes / 60);
+                    dailySummary[dateKey].devices.push({
+                        device_id: record.device_id,
+                        device_name: record.device_name,
+                        user_name: record.user_name,
+                        total_minutes: record.total_minutes,
+                        total_hours: record.total_hours,
+                        remaining_minutes: record.remaining_minutes
+                    });
+                });
+
+                // Ordenar datas em ordem decrescente
+                const sortedDates = Object.keys(dailySummary).sort().reverse();
+                const sortedSummary = {};
+                sortedDates.forEach(date => {
+                    sortedSummary[date] = dailySummary[date];
+                });
+
+                return res.status(200).json({
+                    success: true,
+                    history: allHistory,
+                    grouped_by_date: groupedByDate,
+                    daily_summary: sortedSummary,
+                    total_records: allHistory.length,
+                    total_dates: Object.keys(groupedByDate).length,
+                    timestamp: new Date().toISOString()
                 });
             }
-        }
 
-        if (days) {
-            // Buscar últimos N dias
-            const daysNum = parseInt(days) || 7;
-            const dates = Array.from(historyData.keys())
-                .sort()
-                .slice(-daysNum);
-
-            const result = dates.map(date => {
-                const data = historyData.get(date);
-                return {
-                    date: date,
-                    totalComputers: data.computers.size,
-                    totalActivities: data.totalActivities,
-                    computers: Array.from(data.computers.values()),
-                    summary: {
-                        totalMinutes: Array.from(data.computers.values())
-                            .reduce((sum, comp) => sum + (comp.total_minutes || 0), 0),
-                        averageMinutes: Math.round(
-                            Array.from(data.computers.values())
-                            .reduce((sum, comp) => sum + (comp.total_minutes || 0), 0) /
-                            Math.max(data.computers.size, 1)
-                        )
-                    }
-                };
-            });
-
-            return res.status(200).json({
-                success: true,
-                days: daysNum,
-                data: result
+        } catch (error) {
+            console.error('❌ Erro ao buscar histórico:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Erro ao buscar histórico',
+                details: error.message
             });
         }
-
-        // Retornar resumo geral
-        const summary = {
-            totalDays: historyData.size,
-            availableDates: Array.from(historyData.keys()).sort(),
-            today: getTodayKey(),
-            todayData: historyData.get(getTodayKey()) || null
-        };
-
-        if (summary.todayData) {
-            summary.todayData = {
-                ...summary.todayData,
-                computers: Array.from(summary.todayData.computers.values())
-            };
-        }
-
-        return res.status(200).json({
-            success: true,
-            summary: summary
-        });
     }
 
     return res.status(405).json({
         success: false,
-        message: 'Método não permitido'
+        error: 'Método não permitido'
     });
 };

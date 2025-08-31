@@ -30,8 +30,11 @@ class OnlineActivityMonitor:
         self.computer_name = self.get_computer_name()
         self.user_name = self.get_user_name()
         self.os_info = self.get_os_info()
-        self.session_start_time = time.time()
+        
+        # Controle de tempo - agora baseado em minutos incrementais
         self.current_day = date.today()
+        self.last_minute_sent = 0  # Último minuto enviado
+        self.start_of_day = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         self.is_running = False
         
         print(f"🖥️ Monitor Online iniciado")
@@ -220,41 +223,53 @@ class OnlineActivityMonitor:
             return False
 
     def send_activity(self):
-        """Enviar dados de atividade para o servidor"""
+        """Enviar incremento de 1 minuto para o servidor"""
         try:
+            now = datetime.now()
+            today = now.date()
+            
             # Verificar se é um novo dia
-            today = date.today()
             if today != self.current_day:
                 print(f"🗓️ Novo dia detectado: {today}")
                 self.current_day = today
-                self.session_start_time = time.time()
+                self.start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                self.last_minute_sent = 0
             
-            # Calcular tempo total da sessão atual do dia
-            current_time = time.time()
-            session_minutes = int((current_time - self.session_start_time) / 60)
+            # Calcular quantos minutos se passaram desde o início do dia
+            time_since_start = now - self.start_of_day
+            current_minute = int(time_since_start.total_seconds() / 60)
             
-            # Obter atividade atual
-            activity = self.get_current_activity()
-            window_info = self.get_active_window()
+            # Verificar se um novo minuto se passou
+            if current_minute > self.last_minute_sent:
+                # Enviar incremento de 1 minuto para cada minuto que passou
+                minutes_to_send = current_minute - self.last_minute_sent
+                
+                # Obter atividade atual
+                activity = self.get_current_activity()
+                window_info = self.get_active_window()
+                
+                data = {
+                    'type': 'activity',
+                    'computer_id': self.computer_id,
+                    'increment_minutes': 1,  # Sempre envia 1 minuto por vez
+                    'current_activity': activity,
+                    'active_window': window_info['window_title'] if window_info else None,
+                    'timestamp': now.isoformat(),
+                    'day_date': today.isoformat()
+                }
+                
+                response = requests.post(f'{self.server_url}/api/data', 
+                                       json=data, timeout=10)
+                
+                if response.status_code == 200:
+                    self.last_minute_sent = current_minute
+                    print(f"📊 +1min - {activity} (Total: {current_minute}min hoje)")
+                    return True
+                else:
+                    print(f"❌ Erro ao enviar atividade: {response.status_code}")
+                    return False
             
-            data = {
-                'type': 'activity',
-                'computer_id': self.computer_id,
-                'total_minutes': session_minutes,  # Tempo total da sessão do dia
-                'current_activity': activity,
-                'active_window': window_info['window_title'] if window_info else None,
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            response = requests.post(f'{self.server_url}/api/data', 
-                                   json=data, timeout=10)
-            
-            if response.status_code == 200:
-                print(f"📊 {activity} - {session_minutes}min (sessão hoje)")
-                return True
-            else:
-                print(f"❌ Erro ao enviar atividade: {response.status_code}")
-                return False
+            return True  # Não precisa enviar ainda
                 
         except Exception as e:
             print(f"❌ Erro ao enviar atividade: {e}")
@@ -323,6 +338,7 @@ class OnlineActivityMonitor:
     def monitor_loop(self):
         """Loop principal de monitoramento"""
         print("👁️ Iniciando monitoramento...")
+        print("⏰ Enviando incrementos de 1 minuto a cada minuto")
         
         # Registrar computador
         if not self.register():
@@ -332,21 +348,21 @@ class OnlineActivityMonitor:
         
         while self.is_running:
             try:
-                # Enviar atividade
+                # Enviar atividade (incremento de 1 minuto)
                 self.send_activity()
                 
                 # Verificar comandos
                 self.check_commands()
                 
-                # Aguardar antes da próxima verificação
-                time.sleep(15)  # Atualizar a cada 15 segundos
+                # Aguardar 60 segundos para próxima verificação (1 minuto)
+                time.sleep(60)
                 
             except KeyboardInterrupt:
                 print("\n👋 Monitor interrompido pelo usuário")
                 break
             except Exception as e:
                 print(f"❌ Erro no loop: {e}")
-                time.sleep(15)
+                time.sleep(60)
 
     def start(self):
         """Iniciar o monitor"""

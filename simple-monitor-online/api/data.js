@@ -19,6 +19,10 @@ async function initializeDatabase() {
         const isConnected = await db.testConnection();
         if (isConnected) {
             console.log('✅ Conexão MySQL estabelecida com sucesso');
+            
+            // Criar tabela de histórico diário
+            await dao.createDailyHistoryTable();
+            
             // Atualizar status dos dispositivos na inicialização
             await dao.updateDevicesStatus();
         } else {
@@ -275,6 +279,103 @@ async function handleRegister(data) {
 
 async function handleActivity(data) {
     try {
+        // Verificar se é atividade incremental (novo formato)
+        if (data.increment_minutes && data.day_date) {
+            return await handleIncrementalActivity(data);
+        }
+
+        // Processamento antigo para compatibilidade
+        await handleLegacyActivity(data);
+
+    } catch (error) {
+        console.error('❌ Erro ao processar atividade:', error);
+        // Fallback para cache apenas
+        const computer = computers.get(data.computer_id) || {};
+        computer.current_activity = data.current_activity;
+        computer.last_seen = new Date();
+        computers.set(data.computer_id, computer);
+    }
+}
+
+// Nova função para atividades incrementais
+async function handleIncrementalActivity(data) {
+    try {
+        console.log(`⏱️ Atividade incremental:`, {
+            device: data.computer_id,
+            increment: data.increment_minutes,
+            date: data.day_date,
+            activity: data.current_activity
+        });
+
+        // Atualizar informações do dispositivo
+        if (data.computer_name && data.computer_name !== 'undefined') {
+            await dao.updateDeviceInfo(data.computer_id, {
+                name: data.computer_name,
+                user_name: data.user_name,
+                os_info: data.os_info
+            });
+        }
+
+        // Adicionar tempo incremental ao histórico diário
+        await dao.addIncrementalTime(
+            data.computer_id,
+            data.increment_minutes,
+            {
+                current_activity: data.current_activity,
+                active_window: data.active_window
+            },
+            data.day_date
+        );
+
+        // Atualizar cache local para dashboard em tempo real
+        const computer = computers.get(data.computer_id) || {
+            id: data.computer_id,
+            computer_name: data.computer_name,
+            user_name: data.user_name,
+            os_info: data.os_info,
+            last_seen: new Date(),
+            status: 'online',
+            total_time: 0
+        };
+
+        computer.current_activity = data.current_activity;
+        computer.active_window = data.active_window;
+        computer.last_seen = new Date();
+        computer.status = 'online';
+
+        // Buscar tempo total do dia atual
+        const todayTime = await dao.getCurrentDayTime(data.computer_id, data.day_date);
+        computer.total_time = todayTime;
+
+        computers.set(data.computer_id, computer);
+
+        // Manter atividades no cache
+        let computerActivities = activities.get(data.computer_id) || [];
+        computerActivities.push({
+            timestamp: new Date(),
+            activity: data.current_activity,
+            window: data.active_window,
+            minutes: data.increment_minutes
+        });
+
+        // Manter apenas últimas 20 atividades
+        if (computerActivities.length > 20) {
+            computerActivities.splice(0, computerActivities.length - 20);
+        }
+
+        activities.set(data.computer_id, computerActivities);
+
+        console.log(`✅ +${data.increment_minutes}min → ${data.computer_name} (Total hoje: ${todayTime}min)`);
+
+    } catch (error) {
+        console.error('❌ Erro na atividade incremental:', error);
+        throw error;
+    }
+}
+
+// Função para atividades antigas (compatibilidade)
+async function handleLegacyActivity(data) {
+    try {
         // Sempre atualizar informações do dispositivo com dados da atividade
         if (data.computer_name && data.computer_name !== 'undefined') {
             await dao.updateDeviceInfo(data.computer_id, {
@@ -322,14 +423,10 @@ async function handleActivity(data) {
         activities.set(data.computer_id, computerActivities);
         computers.set(data.computer_id, computer);
 
-        console.log(`💼 Atividade salva: ${data.computer_name} - ${data.current_activity}`);
+        console.log(`💼 Atividade salva (legacy): ${data.computer_name} - ${data.current_activity}`);
     } catch (error) {
-        console.error('❌ Erro ao salvar atividade:', error);
-        // Fallback para cache apenas
-        const computer = computers.get(data.computer_id) || {};
-        computer.current_activity = data.current_activity;
-        computer.last_seen = new Date();
-        computers.set(data.computer_id, computer);
+        console.error('❌ Erro ao salvar atividade legacy:', error);
+        throw error;
     }
 }
 
