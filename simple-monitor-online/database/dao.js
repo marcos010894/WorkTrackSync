@@ -105,7 +105,7 @@ async function updateDeviceInfo(deviceId, deviceInfo) {
 
     const params = [
         deviceInfo.name || 'Computador Desconhecido',
-        deviceInfo.user_name || 'Usuário Desconhecido', 
+        deviceInfo.user_name || 'Usuário Desconhecido',
         deviceInfo.os_info || 'Sistema Desconhecido',
         deviceId
     ];

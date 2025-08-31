@@ -22,6 +22,10 @@ class OnlineActivityMonitor:
             self.server_url = server_url[:-4]
         else:
             self.server_url = server_url.rstrip('/')
+        
+        # Carregar configuração personalizada se existir
+        self.device_config = self.load_device_config()
+        
         self.computer_id = self.get_computer_id()
         self.computer_name = self.get_computer_name()
         self.user_name = self.get_user_name()
@@ -35,6 +39,20 @@ class OnlineActivityMonitor:
         print(f"💻 Computador: {self.computer_name}")
         print(f"👤 Usuário: {self.user_name}")
         print(f"🆔 ID: {self.computer_id}")
+
+    def load_device_config(self):
+        """Carregar configuração personalizada do dispositivo"""
+        config_file = os.path.join(os.path.dirname(__file__), 'device_config.json')
+        try:
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    print(f"✅ Configuração carregada: {config_file}")
+                    return config
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar configuração: {e}")
+        
+        return {}
 
     def get_computer_id(self):
         """Gerar ID único para o computador"""
@@ -51,7 +69,15 @@ class OnlineActivityMonitor:
             return f"pc-{int(time.time())}"
 
     def get_computer_name(self):
-        """Obter nome do computador"""
+        """Obter nome do computador - com suporte para configuração personalizada"""
+        # Verificar se há nome personalizado na configuração
+        if hasattr(self, 'device_config') and 'device_name' in self.device_config:
+            custom_name = self.device_config['device_name']
+            if custom_name and custom_name.strip():
+                print(f"📝 Usando nome personalizado: {custom_name}")
+                return custom_name.strip()
+        
+        # Usar nome padrão do sistema
         try:
             if platform.system() == "Windows":
                 return os.environ.get('COMPUTERNAME', 'PC-Desconhecido')
@@ -61,7 +87,15 @@ class OnlineActivityMonitor:
             return 'Computador-Desconhecido'
 
     def get_user_name(self):
-        """Obter nome do usuário"""
+        """Obter nome do usuário - com suporte para configuração personalizada"""
+        # Verificar se há nome de usuário personalizado na configuração
+        if hasattr(self, 'device_config') and 'user_name' in self.device_config:
+            custom_user = self.device_config['user_name']
+            if custom_user and custom_user.strip():
+                print(f"👤 Usando usuário personalizado: {custom_user}")
+                return custom_user.strip()
+        
+        # Usar nome padrão do sistema
         try:
             if platform.system() == "Windows":
                 return os.environ.get('USERNAME', 'Usuario-Desconhecido')
