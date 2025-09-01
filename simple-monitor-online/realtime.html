@@ -396,6 +396,36 @@
                 📡 Carregando dados dos computadores...
             </div>
         </div>
+
+        <h2 class="section-title">📅 Histórico (minute_tracking)</h2>
+        <div style="background: rgba(255,255,255,0.95); padding:20px; border-radius:12px; margin-bottom:40px; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+            <form id="history-form" style="display:flex; flex-wrap:wrap; gap:15px; align-items:flex-end; margin-bottom:15px;">
+                <div style="display:flex; flex-direction:column;">
+                    <label for="start-date" style="font-size:12px; font-weight:600; color:#555;">Início</label>
+                    <input type="date" id="start-date" style="padding:6px 10px; border:1px solid #ccc; border-radius:6px;">
+                </div>
+                <div style="display:flex; flex-direction:column;">
+                    <label for="end-date" style="font-size:12px; font-weight:600; color:#555;">Fim</label>
+                    <input type="date" id="end-date" style="padding:6px 10px; border:1px solid #ccc; border-radius:6px;">
+                </div>
+                <div style="display:flex; flex-direction:column; min-width:220px;">
+                    <label for="device-filter" style="font-size:12px; font-weight:600; color:#555;">Dispositivo (opcional)</label>
+                    <select id="device-filter" style="padding:6px 10px; border:1px solid #ccc; border-radius:6px;">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <button type="submit" style="background:#667eea; color:#fff; border:none; padding:10px 18px; border-radius:8px; font-weight:600; cursor:pointer;">
+                    🔍 Buscar
+                </button>
+                <button type="button" id="history-refresh" style="background:#764ba2; color:#fff; border:none; padding:10px 18px; border-radius:8px; font-weight:600; cursor:pointer;">
+                    ♻️ Últimos 7 dias
+                </button>
+            </form>
+            <div id="history-loading" class="loading" style="display:none; color:#667eea;">⏳ Carregando histórico...</div>
+            <div id="history-error" style="display:none; color:#c62828; font-weight:600; margin:10px 0;"></div>
+            <div id="history-aggregate"></div>
+            <div id="history-days" style="margin-top:20px;"></div>
+        </div>
     </div>
 
     <script>
@@ -410,6 +440,17 @@
 
                 // Atualizar dados a cada 10 segundos
                 setInterval(() => this.loadData(), 10000);
+
+                // Form handlers
+                document.getElementById('history-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.loadHistory();
+                });
+                document.getElementById('history-refresh').addEventListener('click', () => {
+                    this.resetHistoryRange();
+                    this.loadHistory();
+                });
+                this.resetHistoryRange();
             }
 
             async loadData() {
@@ -428,6 +469,11 @@
 
                         this.updateStats();
                         this.updateComputers();
+                        this.populateDeviceFilter();
+                        if (!this._historyLoadedOnce) {
+                            this._historyLoadedOnce = true;
+                            this.loadHistory();
+                        }
                     } else {
                         console.error('❌ Erro na resposta:', data.error);
                     }
@@ -530,6 +576,109 @@
                         `}
                     </div>
                 `).join('');
+            }
+
+            populateDeviceFilter() {
+                const select = document.getElementById('device-filter');
+                const current = select.value;
+                const existingIds = new Set();
+                // Preserve 'Todos'
+                for (let i = select.options.length - 1; i >= 1; i--) select.remove(i);
+                this.computers.forEach(c => {
+                    if (!existingIds.has(c.id)) {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = `${c.name || c.id}`;
+                        select.appendChild(opt);
+                        existingIds.add(c.id);
+                    }
+                });
+                if ([...select.options].some(o => o.value === current)) select.value = current;
+            }
+
+            resetHistoryRange() {
+                const endInput = document.getElementById('end-date');
+                const startInput = document.getElementById('start-date');
+                const today = new Date();
+                const pad = n => n.toString().padStart(2,'0');
+                const dateStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+                endInput.value = dateStr(today);
+                const past = new Date(today.getTime() - 6*24*60*60*1000);
+                startInput.value = dateStr(past);
+            }
+
+            async loadHistory() {
+                const loading = document.getElementById('history-loading');
+                const errorDiv = document.getElementById('history-error');
+                const daysDiv = document.getElementById('history-days');
+                const aggDiv = document.getElementById('history-aggregate');
+                loading.style.display = 'block';
+                errorDiv.style.display = 'none';
+                daysDiv.innerHTML = '';
+                aggDiv.innerHTML = '';
+                try {
+                    const start = document.getElementById('start-date').value || '';
+                    const end = document.getElementById('end-date').value || '';
+                    const device = document.getElementById('device-filter').value || '';
+                    const params = new URLSearchParams();
+                    if (start) params.append('start', start);
+                    if (end) params.append('end', end);
+                    if (device) params.append('device_id', device);
+                    const url = `${this.baseUrl}/api/history${params.toString() ? '?' + params.toString() : ''}`;
+                    const resp = await fetch(url);
+                    const data = await resp.json();
+                    if (!data.success) throw new Error(data.error || 'Falha ao carregar histórico');
+                    // Aggregate table
+                    if (data.aggregate && data.aggregate.length) {
+                        aggDiv.innerHTML = `<h3 style="margin:10px 0 8px;">Resumo por Dia</h3>` +
+                          `<table style="width:100%; border-collapse:collapse; font-size:14px;">` +
+                          `<thead><tr style="background:#f5f5f5;"><th style='text-align:left;padding:6px 8px;'>Data</th><th style='text-align:right;padding:6px 8px;'>Minutos</th><th style='text-align:right;padding:6px 8px;'>Horas</th></tr></thead>` +
+                          `<tbody>` +
+                          data.aggregate.map(r => `<tr style="border-bottom:1px solid #eee;">
+                                <td style='padding:4px 8px;'>${r.date}</td>
+                                <td style='padding:4px 8px; text-align:right;'>${r.total_minutes}</td>
+                                <td style='padding:4px 8px; text-align:right;'>${r.formatted}</td>
+                          </tr>`).join('') +
+                          `</tbody></table>`;
+                    } else {
+                        aggDiv.innerHTML = '<em>Sem dados no período.</em>';
+                    }
+                    // Detailed per device/day
+                    if (data.days && data.days.length) {
+                        const grouped = {};
+                        data.days.forEach(d => { if (!grouped[d.date]) grouped[d.date] = []; grouped[d.date].push(d); });
+                        const dayBlocks = Object.keys(grouped).sort((a,b)=> a < b ? 1 : -1).map(date => {
+                            const rows = grouped[date].map(r => `<tr style='border-bottom:1px solid #eee;'>
+                                <td style='padding:4px 6px;'>${r.device_name || r.device_id}</td>
+                                <td style='padding:4px 6px;'>${r.user_name || ''}</td>
+                                <td style='padding:4px 6px; text-align:right;'>${r.total_minutes}</td>
+                                <td style='padding:4px 6px; text-align:right;'>${r.formatted}</td>
+                            </tr>`).join('');
+                            return `<details style='margin-bottom:12px;' ${Object.keys(grouped).length <= 5 ? 'open':''}>
+                                <summary style='cursor:pointer; font-weight:600;'>📅 ${date} (${grouped[date].reduce((s,x)=>s+x.total_minutes,0)} min)</summary>
+                                <div style='overflow-x:auto;'>
+                                  <table style='width:100%; border-collapse:collapse; font-size:13px; margin-top:6px;'>
+                                    <thead><tr style='background:#fafafa;'>
+                                      <th style='text-align:left;padding:4px 6px;'>Dispositivo</th>
+                                      <th style='text-align:left;padding:4px 6px;'>Usuário</th>
+                                      <th style='text-align:right;padding:4px 6px;'>Min</th>
+                                      <th style='text-align:right;padding:4px 6px;'>Horas</th>
+                                    </tr></thead>
+                                    <tbody>${rows}</tbody>
+                                  </table>
+                                </div>
+                            </details>`;
+                        }).join('');
+                        daysDiv.innerHTML = `<h3 style='margin:18px 0 8px;'>Detalhes</h3>` + dayBlocks;
+                    } else {
+                        daysDiv.innerHTML = '<em>Nenhum registro detalhado.</em>';
+                    }
+                } catch (err) {
+                    errorDiv.textContent = 'Erro: ' + err.message;
+                    errorDiv.style.display = 'block';
+                } finally {
+                    loading.style.display = 'none';
+                }
             }
 
             async sendCommand(computerId, action) {
