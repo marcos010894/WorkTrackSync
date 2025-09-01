@@ -12,6 +12,18 @@ const DAO = dao; // Alias para compatibilidade
         await DAO.createDailyHistoryTable();
         await DAO.createMinuteTrackingTable();
         console.log('✅ Tabelas WebSocket inicializadas');
+        // Pré-carregar minutos de hoje para reduzir falso '0' pós-deploy
+        try {
+            const preload = await DAO.getMinuteTrackingDailySummary({ start: new Date().toISOString().split('T')[0], end: new Date().toISOString().split('T')[0] });
+            if (preload && preload.device_daily) {
+                preload.device_daily.forEach(r => {
+                    dailyTimeCache.set(r.device_id, r.total_minutes);
+                });
+                console.log(`📦 Cache inicial minutos carregado (${dailyTimeCache.size} dispositivos)`);
+            }
+        } catch (e) {
+            console.log('⚠️ Falha ao pré-carregar minutos:', e.message);
+        }
     } catch (error) {
         console.error('❌ Erro na inicialização WebSocket:', error);
     }
@@ -58,35 +70,14 @@ async function updateDeviceStatus(deviceId, deviceName, userName) {
         }
     }
 
-    // Salvar minuto de atividade (sempre que receber heartbeat)
-    if (existingDevice) {
-        const timeSinceLastSeen = now - new Date(existingDevice.last_seen);
-
-        // Se última atividade foi entre 50s e 180s, salvar 1 minuto
-        if (timeSinceLastSeen >= 50000 && timeSinceLastSeen <= 180000) {
-            try {
-                await DAO.saveMinuteTracking(deviceId, deviceName, userName);
-
-                // Atualizar cache local
-                const currentMinutes = dailyTimeCache.get(deviceId) || 0;
-                const newMinutes = currentMinutes + 1;
-                dailyTimeCache.set(deviceId, newMinutes);
-
-                const hours = Math.floor(newMinutes / 60);
-                const mins = newMinutes % 60;
-                console.log(`⏰ +1min salvo: ${deviceName} = ${hours}h ${mins}m total hoje`);
-            } catch (error) {
-                console.error(`❌ Erro ao salvar minuto para ${deviceName}:`, error);
-            }
-        }
-    } else {
-        // Primeiro heartbeat do dia, salvar minuto inicial
+    // NÃO salva mais minuto aqui para evitar duplicidade (api/data já faz isso)
+    if (!existingDevice) {
+        // Preencher cache inicial consultando banco
         try {
-            await DAO.saveMinuteTracking(deviceId, deviceName, userName);
-            dailyTimeCache.set(deviceId, 1);
-            console.log(`🆕 Primeiro minuto salvo: ${deviceName}`);
-        } catch (error) {
-            console.error(`❌ Erro ao salvar primeiro minuto para ${deviceName}:`, error);
+            const todayHours = await DAO.getDeviceTodayHours(deviceId);
+            dailyTimeCache.set(deviceId, todayHours.total_minutes);
+        } catch (e) {
+            dailyTimeCache.set(deviceId, 0);
         }
     }
 

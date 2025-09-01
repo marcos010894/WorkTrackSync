@@ -48,6 +48,7 @@ async function createMinuteTrackingTable() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_device_date (device_id, tracked_date),
             INDEX idx_tracked_minute (tracked_minute),
+            UNIQUE KEY uniq_device_minute (device_id, tracked_minute),
             FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `;
@@ -582,16 +583,22 @@ async function getAllDevicesHistory(limit = 100) {
 // Salvar um minuto individual de atividade
 async function saveMinuteTracking(deviceId, deviceName, userName) {
     const now = new Date();
+    // Truncar para o minuto (zero segundos / ms)
+    now.setSeconds(0, 0);
     const today = now.toISOString().split('T')[0];
 
     const query = `
-        INSERT INTO minute_tracking (device_id, device_name, user_name, tracked_date, tracked_minute, activity_type)
+        INSERT IGNORE INTO minute_tracking (device_id, device_name, user_name, tracked_date, tracked_minute, activity_type)
         VALUES (?, ?, ?, ?, ?, 'online')
     `;
 
     try {
-        await db.executeQuery(query, [deviceId, deviceName, userName, today, now]);
-        console.log(`⏰ Minuto salvo: ${deviceName} às ${now.toLocaleTimeString()}`);
+        const res = await db.executeQuery(query, [deviceId, deviceName, userName, today, now]);
+        if (res.affectedRows === 1) {
+            console.log(`⏰ Minuto salvo: ${deviceName} ${now.toISOString()}`);
+        } else {
+            console.log(`↺ Minuto ignorado (duplicado): ${deviceName} ${now.toISOString()}`);
+        }
         return true;
     } catch (error) {
         console.error('❌ Erro ao salvar minuto:', error);
@@ -705,7 +712,7 @@ async function getMinuteTrackingDailySummary(startDate = null, endDate = null, d
     const toDateStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
     if (!endDate) endDate = toDateStr(today);
     if (!startDate) {
-        const past = new Date(today.getTime() - 6*24*60*60*1000);
+        const past = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
         startDate = toDateStr(past);
     }
 
@@ -785,6 +792,6 @@ module.exports = {
     getDeviceTodayHours,
     getAllDevicesTodayStats,
     cleanOldMinuteTracking,
-    getSystemMinuteTrackingSum
-    ,getMinuteTrackingDailySummary
+    getSystemMinuteTrackingSum,
+    getMinuteTrackingDailySummary
 };
