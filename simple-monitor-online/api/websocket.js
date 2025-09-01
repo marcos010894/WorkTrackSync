@@ -8,12 +8,12 @@ const dao = require('../database/dao');
 // Cache simples para dispositivos online
 let onlineDevices = new Map(); // device_id -> { name, last_seen, status }
 
-// Função para verificar se dispositivo está online (últimos 2 minutos)
+// Função para verificar se dispositivo está online (últimos 90 segundos)
 function isDeviceOnline(lastSeen) {
     if (!lastSeen) return false;
     const now = new Date();
     const diff = now - new Date(lastSeen);
-    return diff < 120000; // 2 minutos
+    return diff < 90000; // 90 segundos (1.5 minutos)
 }
 
 // Função para atualizar status de um dispositivo
@@ -61,8 +61,8 @@ setInterval(() => {
     onlineDevices.forEach((device, deviceId) => {
         const timeDiff = now - new Date(device.last_seen);
         
-        // Remove dispositivos offline há mais de 10 minutos
-        if (timeDiff > 600000) {
+        // Remove dispositivos offline há mais de 2 minutos (quase instantâneo)
+        if (timeDiff > 120000) { // 2 minutos
             onlineDevices.delete(deviceId);
             cleaned++;
         }
@@ -71,7 +71,7 @@ setInterval(() => {
     if (cleaned > 0) {
         console.log(`🧹 ${cleaned} dispositivos offline removidos do cache`);
     }
-}, 60000); // Verificar a cada minuto
+}, 10000); // Verificar a cada 10 segundos (mais frequente)
 
 module.exports = async function handler(req, res) {
     // CORS headers
