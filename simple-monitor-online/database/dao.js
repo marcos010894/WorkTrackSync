@@ -5,6 +5,15 @@
 
 const db = require('./connection');
 
+// Fuso horário lógico para consolidação diária (minutos). Default: -180 (UTC-3)
+const TZ_OFFSET_MINUTES = parseInt(process.env.WORKTRACK_TZ_OFFSET_MINUTES || process.env.TZ_OFFSET_MINUTES || '-180', 10);
+
+function getOffsetDateString(dateObj = new Date()) {
+    const shifted = new Date(dateObj.getTime() + TZ_OFFSET_MINUTES * 60000);
+    // toISOString sempre UTC; após shift, a parte de data representa o "dia local" desejado
+    return shifted.toISOString().split('T')[0];
+}
+
 /**
  * INICIALIZAÇÃO DE TABELAS
  */
@@ -585,7 +594,8 @@ async function saveMinuteTracking(deviceId, deviceName, userName) {
     const now = new Date();
     // Truncar para o minuto (zero segundos / ms)
     now.setSeconds(0, 0);
-    const today = now.toISOString().split('T')[0];
+    // Data lógica (considerando offset) – garante que trabalho após meia-noite UTC mas antes da meia-noite local continue no mesmo dia
+    const today = getOffsetDateString(now);
 
     const query = `
         INSERT IGNORE INTO minute_tracking (device_id, device_name, user_name, tracked_date, tracked_minute, activity_type)
@@ -608,7 +618,7 @@ async function saveMinuteTracking(deviceId, deviceName, userName) {
 
 // Buscar total de horas do dia para um dispositivo
 async function getDeviceTodayHours(deviceId, date = null) {
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || getOffsetDateString();
 
     const query = `
         SELECT COUNT(*) as total_minutes
@@ -693,7 +703,7 @@ async function cleanOldMinuteTracking() {
 
 // Somatório de minutos (minute_tracking) de todos os dispositivos no dia
 async function getSystemMinuteTrackingSum(date = null) {
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || getOffsetDateString();
     const query = `SELECT COUNT(*) as total_minutes FROM minute_tracking WHERE tracked_date = ?`;
     try {
         const result = await db.executeQuery(query, [targetDate]);
@@ -706,14 +716,14 @@ async function getSystemMinuteTrackingSum(date = null) {
 
 // Resumo diário por faixa de datas (minute_tracking)
 async function getMinuteTrackingDailySummary(startDate = null, endDate = null, deviceId = null) {
-    // Defaults: últimos 7 dias
+    // Defaults: últimos 7 dias considerando offset
     const today = new Date();
     const pad = n => n.toString().padStart(2, '0');
     const toDateStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-    if (!endDate) endDate = toDateStr(today);
+    if (!endDate) endDate = getOffsetDateString(today);
     if (!startDate) {
         const past = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
-        startDate = toDateStr(past);
+        startDate = getOffsetDateString(past);
     }
 
     let query = `
