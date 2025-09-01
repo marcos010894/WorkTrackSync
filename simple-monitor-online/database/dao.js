@@ -697,6 +697,53 @@ async function getSystemMinuteTrackingSum(date = null) {
     }
 }
 
+// Resumo diário por faixa de datas (minute_tracking)
+async function getMinuteTrackingDailySummary(startDate = null, endDate = null, deviceId = null) {
+    // Defaults: últimos 7 dias
+    const today = new Date();
+    const pad = n => n.toString().padStart(2, '0');
+    const toDateStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    if (!endDate) endDate = toDateStr(today);
+    if (!startDate) {
+        const past = new Date(today.getTime() - 6*24*60*60*1000);
+        startDate = toDateStr(past);
+    }
+
+    let query = `
+        SELECT 
+            tracked_date AS date,
+            device_id,
+            MAX(device_name) AS device_name,
+            MAX(user_name) AS user_name,
+            COUNT(*) AS total_minutes
+        FROM minute_tracking
+        WHERE tracked_date BETWEEN ? AND ?
+    `;
+    const params = [startDate, endDate];
+    if (deviceId) {
+        query += ' AND device_id = ?';
+        params.push(deviceId);
+    }
+    query += ' GROUP BY tracked_date, device_id ORDER BY tracked_date DESC, total_minutes DESC';
+
+    try {
+        const rows = await db.executeQuery(query, params);
+        return rows.map(r => ({
+            date: r.date,
+            device_id: r.device_id,
+            device_name: r.device_name,
+            user_name: r.user_name,
+            total_minutes: r.total_minutes,
+            total_hours: Math.floor(r.total_minutes / 60),
+            remaining_minutes: r.total_minutes % 60,
+            formatted: `${Math.floor(r.total_minutes/60)}h ${r.total_minutes%60}m`
+        }));
+    } catch (error) {
+        console.error('❌ Erro ao buscar resumo diário:', error);
+        return [];
+    }
+}
+
 module.exports = {
     // Inicialização
     createDailyHistoryTable,
@@ -739,4 +786,5 @@ module.exports = {
     getAllDevicesTodayStats,
     cleanOldMinuteTracking,
     getSystemMinuteTrackingSum
+    ,getMinuteTrackingDailySummary
 };

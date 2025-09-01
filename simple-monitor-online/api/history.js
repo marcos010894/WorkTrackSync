@@ -1,4 +1,59 @@
 /**
+ * API de Histórico - resumo diário baseado em minute_tracking
+ * Parâmetros (query string):
+ *   start (YYYY-MM-DD) opcional
+ *   end   (YYYY-MM-DD) opcional
+ *   device_id opcional (filtrar por dispositivo)
+ */
+
+const dao = require('../database/dao');
+
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, error: 'Método não permitido' });
+  }
+
+  try {
+    const { start, end, device_id } = req.query || {};
+    const summary = await dao.getMinuteTrackingDailySummary(start, end, device_id);
+
+    // Agregado geral por dia
+    const aggregateByDay = summary.reduce((acc, row) => {
+      if (!acc[row.date]) acc[row.date] = 0;
+      acc[row.date] += row.total_minutes;
+      return acc;
+    }, {});
+
+    const aggregateArray = Object.keys(aggregateByDay).sort((a,b) => a < b ? 1 : -1).map(date => ({
+      date,
+      total_minutes: aggregateByDay[date],
+      total_hours: Math.floor(aggregateByDay[date] / 60),
+      remaining_minutes: aggregateByDay[date] % 60,
+      formatted: `${Math.floor(aggregateByDay[date]/60)}h ${aggregateByDay[date]%60}m`
+    }));
+
+    return res.status(200).json({
+      success: true,
+      range: { start: start || summary.at(-1)?.date || null, end: end || summary[0]?.date || null },
+      device_filter: device_id || null,
+      days: summary,
+      aggregate: aggregateArray,
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Erro no histórico:', error);
+    return res.status(500).json({ success: false, error: 'Erro interno', details: error.message });
+  }
+};
+/**
  * API para histórico diário
  * Sistema de consulta de dados históricos por data
  */
