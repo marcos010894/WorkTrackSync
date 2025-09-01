@@ -583,7 +583,7 @@ async function getAllDevicesHistory(limit = 100) {
 async function saveMinuteTracking(deviceId, deviceName, userName) {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    
+
     const query = `
         INSERT INTO minute_tracking (device_id, device_name, user_name, tracked_date, tracked_minute, activity_type)
         VALUES (?, ?, ?, ?, ?, 'online')
@@ -602,7 +602,7 @@ async function saveMinuteTracking(deviceId, deviceName, userName) {
 // Buscar total de horas do dia para um dispositivo
 async function getDeviceTodayHours(deviceId, date = null) {
     const targetDate = date || new Date().toISOString().split('T')[0];
-    
+
     const query = `
         SELECT COUNT(*) as total_minutes
         FROM minute_tracking 
@@ -611,7 +611,8 @@ async function getDeviceTodayHours(deviceId, date = null) {
 
     try {
         const result = await db.executeQuery(query, [deviceId, targetDate]);
-        const totalMinutes = result[0]?.total_minutes || 0;
+        // Corrigido operador ternário inválido
+        const totalMinutes = result[0] ? (result[0].total_minutes || 0) : 0;
         return {
             total_minutes: totalMinutes,
             total_hours: Math.floor(totalMinutes / 60),
@@ -632,7 +633,7 @@ async function getDeviceTodayHours(deviceId, date = null) {
 // Buscar estatísticas de todos os dispositivos para hoje
 async function getAllDevicesTodayStats(date = null) {
     const targetDate = date || new Date().toISOString().split('T')[0];
-    
+
     const query = `
         SELECT 
             device_id,
@@ -683,6 +684,19 @@ async function cleanOldMinuteTracking() {
     }
 }
 
+// Somatório de minutos (minute_tracking) de todos os dispositivos no dia
+async function getSystemMinuteTrackingSum(date = null) {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    const query = `SELECT COUNT(*) as total_minutes FROM minute_tracking WHERE tracked_date = ?`;
+    try {
+        const result = await db.executeQuery(query, [targetDate]);
+        return result[0] ? (result[0].total_minutes || 0) : 0;
+    } catch (error) {
+        console.error('❌ Erro ao somar minutos (minute_tracking):', error);
+        return 0;
+    }
+}
+
 module.exports = {
     // Inicialização
     createDailyHistoryTable,
@@ -723,5 +737,6 @@ module.exports = {
     saveMinuteTracking,
     getDeviceTodayHours,
     getAllDevicesTodayStats,
-    cleanOldMinuteTracking
+    cleanOldMinuteTracking,
+    getSystemMinuteTrackingSum
 };

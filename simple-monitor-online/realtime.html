@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WorkTrack Sync - Dashboard em Tempo Real</title>
+    <title>WorkTrackSync - Dashboard Online</title>
     <style>
         * {
             margin: 0;
@@ -16,368 +16,592 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+            color: #333;
         }
         
         .header {
-            text-align: center;
-            margin-bottom: 30px;
-            color: white;
-        }
-        
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .stat-number {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }
-        
-        .devices-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-        
-        .device-card {
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
+            backdrop-filter: blur(10px);
             padding: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
         
-        .device-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .device-header {
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 20px;
         }
         
-        .device-name {
-            font-size: 1.2rem;
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stats-bar {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 10px 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            min-width: 100px;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        
+        .section-title {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .computers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+        
+        .computer-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .computer-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .computer-card.online {
+            border-color: #4CAF50;
+            background: rgba(255, 255, 255, 0.98);
+        }
+        
+        .computer-card.offline {
+            border-color: #f44336;
+            background: rgba(255, 255, 255, 0.8);
+            opacity: 0.7;
+        }
+        
+        .computer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .computer-name {
+            font-size: 20px;
             font-weight: bold;
             color: #333;
         }
         
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 10px;
-        }
-        
-        .online {
-            background: #00ff88;
-            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
-            animation: pulse 2s infinite;
-        }
-        
-        .offline {
-            background: #ff4757;
-        }
-        
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
-            100% {
-                opacity: 1;
-            }
-        }
-        
-        .device-info {
-            margin-bottom: 10px;
-        }
-        
-        .info-label {
+        .status-badge {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
             font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-online {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .status-offline {
+            background: #f44336;
+            color: white;
+        }
+        
+        .computer-info {
+            margin-bottom: 20px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .label {
+            font-weight: 500;
             color: #666;
-            margin-right: 8px;
         }
         
-        .time-display {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
-            margin-top: 10px;
+        .value {
+            color: #333;
+            font-weight: 600;
         }
         
-        .time-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-        
-        .time-label {
-            font-size: 0.8rem;
-            opacity: 0.9;
-        }
-        
-        .last-seen {
-            font-size: 0.8rem;
-            color: #999;
-            margin-top: 10px;
-        }
-        
-        .loading {
-            text-align: center;
-            color: white;
-            font-size: 1.2rem;
-            margin: 50px 0;
-        }
-        
-        .error {
-            background: rgba(255, 71, 87, 0.9);
-            color: white;
+        .current-activity {
+            background: rgba(102, 126, 234, 0.1);
+            border-left: 4px solid #667eea;
             padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .current-activity strong {
+            color: #667eea;
+        }
+        
+        .current-activity small {
+            color: #666;
+        }
+        
+        .computer-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .control-btn {
+            flex: 1;
+            min-width: 100px;
+            padding: 12px 15px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        
+        .lock-btn {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .lock-btn:hover {
+            background: #f57c00;
+            transform: translateY(-2px);
+        }
+        
+        .restart-btn {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .restart-btn:hover {
+            background: #1976D2;
+            transform: translateY(-2px);
+        }
+        
+        .shutdown-btn {
+            background: #f44336;
+            color: white;
+        }
+        
+        .shutdown-btn:hover {
+            background: #d32f2f;
+            transform: translateY(-2px);
+        }
+        
+        .offline-btn {
+            background: #9e9e9e;
+            color: white;
+            cursor: not-allowed;
+        }
+        
+        .offline-btn:hover {
+            transform: none;
+        }
+        
+        .empty-state {
             text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 60px 40px;
+            color: #666;
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .empty-state code {
+            background: #f5f5f5;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .server-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 30px;
+            color: white;
+            text-align: center;
+        }
+        
+        .server-info strong {
+            color: #fff;
         }
         
         .refresh-indicator {
             position: fixed;
             top: 20px;
             right: 20px;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(102, 126, 234, 0.9);
             color: white;
-            padding: 10px 15px;
-            border-radius: 20px;
-            font-size: 0.9rem;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+        }
+        
+        .refresh-indicator.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        @media (max-width: 768px) {
+            .computers-grid {
+                grid-template-columns: 1fr;
+            }
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            .stats-bar {
+                justify-content: center;
+            }
+            .computer-controls {
+                flex-direction: column;
+            }
+            .control-btn {
+                min-width: auto;
+            }
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            margin: 50px 0;
+        }
+        
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .loading {
+            animation: pulse 2s infinite;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🚀 WorkTrack Sync</h1>
-            <p>Dashboard em Tempo Real - Status + Tempo Online</p>
-        </div>
-
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number" id="totalDevices">-</div>
-                <div class="stat-label">Total de Dispositivos</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="onlineDevices">-</div>
-                <div class="stat-label">Online Agora</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="offlineDevices">-</div>
-                <div class="stat-label">Offline</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="totalTime">-</div>
-                <div class="stat-label">Tempo Total Hoje</div>
-            </div>
-        </div>
-
-        <div id="loading" class="loading">
-            ⏳ Carregando dispositivos...
-        </div>
-
-        <div id="error" class="error" style="display: none;">
-        </div>
-
-        <div id="devicesContainer" class="devices-grid">
-        </div>
+    <div class="refresh-indicator" id="refresh-indicator">
+        🔄 Atualizando dados...
     </div>
 
-    <div class="refresh-indicator" id="refreshIndicator">
-        🔄 Atualizando...
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                �️ WorkTrackSync Dashboard
+            </div>
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <span class="stat-number" id="total-computers">0</span>
+                    <div class="stat-label">Total</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="online-computers">0</span>
+                    <div class="stat-label">Online</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="offline-computers">0</span>
+                    <div class="stat-label">Offline</div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="total-hours">0h</span>
+                    <div class="stat-label">Horas Hoje</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="server-info">
+            <strong>🌐 Servidor:</strong> <span id="server-url">Carregando...</span>
+        </div>
+
+        <h2 class="section-title">
+            💻 Computadores Monitorados
+        </h2>
+
+        <div class="computers-grid" id="computers-grid">
+            <div class="loading">
+                📡 Carregando dados dos computadores...
+            </div>
+        </div>
     </div>
 
     <script>
-        const API_URL = 'https://simple-monitor-online-kglfp792n-marcos10895s-projects.vercel.app/api/websocket';
-        let refreshInterval;
+        class OnlineDashboard {
+            constructor() {
+                this.baseUrl = window.location.origin;
+                this.computers = [];
+                this.stats = {};
 
-        // Formatar minutos para HH:MM
-        function formatMinutes(minutes) {
-            const hours = Math.floor(minutes / 60);
-            const mins = minutes % 60;
-            return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-        }
+                document.getElementById('server-url').textContent = this.baseUrl;
+                this.loadData();
 
-        // Formatar tempo desde última atividade
-        function formatTimeDiff(seconds) {
-            if (seconds < 60) return `${seconds}s atrás`;
-            if (seconds < 3600) return `${Math.floor(seconds / 60)}min atrás`;
-            return `${Math.floor(seconds / 3600)}h atrás`;
-        }
-
-        // Buscar dados da API
-        async function fetchDevices() {
-            try {
-                const response = await fetch(API_URL);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-                const data = await response.json();
-                return data;
-            } catch (error) {
-                console.error('Erro ao buscar dados:', error);
-                throw error;
-            }
-        }
-
-        // Renderizar dispositivos
-        function renderDevices(data) {
-            const container = document.getElementById('devicesContainer');
-            const loading = document.getElementById('loading');
-            const errorDiv = document.getElementById('error');
-
-            // Esconder loading e erro
-            loading.style.display = 'none';
-            errorDiv.style.display = 'none';
-
-            // Atualizar estatísticas
-            document.getElementById('totalDevices').textContent = data.total_devices || 0;
-            document.getElementById('onlineDevices').textContent = data.online_devices || 0;
-            document.getElementById('offlineDevices').textContent = data.offline_devices || 0;
-
-            // Calcular tempo total em formato horas
-            const totalMinutes = data.devices.reduce((sum, device) => sum + (device.daily_minutes || 0), 0);
-            const totalHours = Math.floor(totalMinutes / 60);
-            const remainingMins = totalMinutes % 60;
-            document.getElementById('totalTime').textContent = `${totalHours}h ${remainingMins}m`;
-
-            // Limpar container
-            container.innerHTML = '';
-
-            if (!data.devices || data.devices.length === 0) {
-                container.innerHTML = '<div style="color: white; text-align: center; grid-column: 1/-1;">📱 Nenhum dispositivo encontrado</div>';
-                return;
+                // Atualizar dados a cada 10 segundos
+                setInterval(() => this.loadData(), 10000);
             }
 
-            // Renderizar cada dispositivo
-            data.devices.forEach(device => {
-                const card = document.createElement('div');
-                card.className = 'device-card';
+            async loadData() {
+                try {
+                    this.showRefreshIndicator();
+                    console.log('📡 Carregando dados...');
 
-                card.innerHTML = `
-                    <div class="device-header">
-                        <div style="display: flex; align-items: center;">
-                            <div class="status-indicator ${device.status}"></div>
-                            <div class="device-name">${device.computer_name || device.name || 'Computador Desconhecido'}</div>
+                    const response = await fetch(`${this.baseUrl}/api/data`);
+                    const data = await response.json();
+
+                    console.log('📊 Dados recebidos:', data);
+
+                    if (data.success) {
+                        this.computers = data.computers || [];
+                        this.stats = data.stats || {};
+
+                        this.updateStats();
+                        this.updateComputers();
+                    } else {
+                        console.error('❌ Erro na resposta:', data.error);
+                    }
+
+                } catch (error) {
+                    console.error('❌ Erro ao carregar dados:', error);
+                    this.showError();
+                } finally {
+                    this.hideRefreshIndicator();
+                }
+            }
+
+            updateStats() {
+                const onlineCount = this.computers.filter(c => c.is_online).length;
+                const totalCount = this.computers.length;
+                const offlineCount = totalCount - onlineCount;
+                const totalHours = Math.round((this.stats.today_hours || 0) * 100) / 100;
+
+                document.getElementById('total-computers').textContent = totalCount;
+                document.getElementById('online-computers').textContent = onlineCount;
+                document.getElementById('offline-computers').textContent = offlineCount;
+                document.getElementById('total-hours').textContent = totalHours + 'h';
+            }
+
+            updateComputers() {
+                    const grid = document.getElementById('computers-grid');
+
+                    // Com MySQL, sempre mostramos dispositivos (online ou offline)
+                    // Não há mais necessidade da mensagem "nenhum dispositivo"
+
+                    grid.innerHTML = this.computers.map(computer => `
+                    <div class="computer-card ${computer.is_online ? 'online' : 'offline'}">
+                        <div class="computer-header">
+                            <div class="computer-name">${computer.name}</div>
+                            <div class="status-badge ${computer.is_online ? 'status-online' : 'status-offline'}">
+                                ${computer.is_online ? '🟢 Online' : '🔴 Offline'}
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="device-info">
-                        <span class="info-label">👤 Usuário:</span>
-                        ${device.user_name || device.user || 'Usuário Desconhecido'}
-                    </div>
-                    
-                    <div class="device-info">
-                        <span class="info-label">🆔 ID:</span>
-                        ${device.device_id || device.id || 'N/A'}
-                    </div>
-                    
-                    <div class="device-info">
-                        <span class="info-label">📊 Status:</span>
-                        <span style="color: ${device.status === 'online' ? '#00ff88' : '#ff4757'}; font-weight: bold;">
-                            ${device.status === 'online' ? '🟢 ONLINE' : '🔴 OFFLINE'}
-                        </span>
-                    </div>
+                        
+                        <div class="computer-info">
+                            <div class="info-item">
+                                <span class="label">👤 Usuário:</span>
+                                <span class="value">${computer.user_name || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">💻 Sistema:</span>
+                                <span class="value">${computer.os_info || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">⏱️ Tempo Hoje:</span>
+                                <span class="value">${(() => { const m = (computer.total_time || computer.today_minutes || 0); return Math.floor(m/60)+'h '+(m%60)+'m'; })()}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">🕐 Última Atividade:</span>
+                                <span class="value">${this.formatTime(computer.last_seen)}</span>
+                            </div>
+                            ${computer.is_online ? `
+                            <div class="info-item">
+                                <span class="label">� Total de sessões:</span>
+                                <span class="value">${computer.total_sessions || 0}</span>
+                            </div>
+                            ` : `
+                            <div class="info-item">
+                                <span class="label">📊 Total de sessões:</span>
+                                <span class="value">${computer.total_sessions || 0}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">� Primeira vez visto:</span>
+                                <span class="value">${this.formatTime(computer.first_seen)}</span>
+                            </div>
+                            `}
+                        </div>
 
-                    <div class="time-display">
-                        <div class="time-value">${device.daily_time_formatted || '0h 0m'}</div>
-                        <div class="time-label">Tempo Online Hoje</div>
+                        ${computer.current_activity && computer.is_online ? `
+                        <div class="current-activity">
+                            <strong>🎯 Atividade Atual:</strong><br>
+                            ${computer.current_activity}<br>
+                            <small>📱 Janela: ${computer.active_window || 'N/A'}</small>
+                        </div>
+                        ` : ''}
+
+                        ${computer.is_online ? `
+                        <div class="computer-controls">
+                            <button class="control-btn lock-btn" onclick="dashboard.sendCommand('${computer.id}', 'lock')">
+                                🔒 Bloquear
+                            </button>
+                            <button class="control-btn restart-btn" onclick="dashboard.sendCommand('${computer.id}', 'restart')">
+                                🔄 Reiniciar
+                            </button>
+                            <button class="control-btn shutdown-btn" onclick="dashboard.sendCommand('${computer.id}', 'shutdown')">
+                                ⚡ Desligar
+                            </button>
+                        </div>
+                        ` : `
+                        <div class="computer-controls">
+                            <button class="control-btn offline-btn" disabled>
+                                🚫 Offline - Comandos indisponíveis
+                            </button>
+                        </div>
+                        `}
                     </div>
-                    
-                    <div class="last-seen">
-                        🕐 Última atividade: ${formatTimeDiff(device.time_diff_seconds || 0)}
-                    </div>
-                `;
+                `).join('');
+            }
 
-                container.appendChild(card);
-            });
-        }
+            async sendCommand(computerId, action) {
+                const computer = this.computers.find(c => c.id === computerId);
+                if (!computer || !computer.is_online) return;
 
-        // Mostrar erro
-        function showError(message) {
-            const loading = document.getElementById('loading');
-            const errorDiv = document.getElementById('error');
+                const confirmMessage = {
+                    'lock': `Bloquear o computador "${computer.name}"?`,
+                    'restart': `Reiniciar o computador "${computer.name}"?`,
+                    'shutdown': `Desligar o computador "${computer.name}"?`
+                };
 
-            loading.style.display = 'none';
-            errorDiv.style.display = 'block';
-            errorDiv.textContent = `❌ Erro: ${message}`;
-        }
+                if (confirm(confirmMessage[action])) {
+                    try {
+                        const response = await fetch(`${this.baseUrl}/api/commands`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                computer_id: computerId,
+                                action: action
+                            })
+                        });
 
-        // Atualizar dados
-        async function updateData() {
-            const indicator = document.getElementById('refreshIndicator');
-            indicator.style.display = 'block';
+                        const result = await response.json();
 
-            try {
-                const data = await fetchDevices();
-                renderDevices(data);
-            } catch (error) {
-                showError(error.message);
-            } finally {
+                        if (result.success) {
+                            alert(`✅ Comando ${action} enviado para ${computer.name}`);
+                            console.log(`🎮 Comando enviado:`, result);
+                        } else {
+                            alert(`❌ Erro ao enviar comando: ${result.error}`);
+                        }
+
+                    } catch (error) {
+                        console.error('Erro ao enviar comando:', error);
+                        alert('❌ Erro de conexão ao enviar comando');
+                    }
+                }
+            }
+
+            formatTime(timestamp) {
+                if (!timestamp) return 'N/A';
+                return new Date(timestamp).toLocaleString('pt-BR');
+            }
+
+            showRefreshIndicator() {
+                const indicator = document.getElementById('refresh-indicator');
+                indicator.classList.add('show');
+            }
+
+            hideRefreshIndicator() {
+                const indicator = document.getElementById('refresh-indicator');
                 setTimeout(() => {
-                    indicator.style.display = 'none';
+                    indicator.classList.remove('show');
                 }, 500);
             }
-        }
 
-        // Inicializar
-        function init() {
-            updateData();
-
-            // Atualizar a cada 3 segundos (tempo real)
-            refreshInterval = setInterval(updateData, 3000);
-        }
-
-        // Iniciar quando a página carregar
-        document.addEventListener('DOMContentLoaded', init);
-
-        // Atualizar quando a aba ficar visível novamente
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                updateData();
+            showError() {
+                const grid = document.getElementById('computers-grid');
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <h3>❌ Erro de Conexão</h3>
+                        <p>Não foi possível carregar os dados dos computadores.</p>
+                        <p>Verifique sua conexão e tente novamente.</p>
+                    </div>
+                `;
             }
-        });
+        }
+
+        // Inicializar dashboard
+        const dashboard = new OnlineDashboard();
     </script>
 </body>
 

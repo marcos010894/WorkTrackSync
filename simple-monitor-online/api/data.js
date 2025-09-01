@@ -187,7 +187,7 @@ async function initializeDatabase() {
 
             // Criar tabela de histórico diário
             await dao.createDailyHistoryTable();
-            
+
             // Criar nova tabela de tracking de minutos
             await dao.createMinuteTrackingTable();
 
@@ -786,10 +786,10 @@ async function handleHeartbeat(data) {
     try {
         console.log(`💓 Heartbeat recebido: ${data.computer_id} - ${data.current_activity}`);
 
-        // Limpar acumuladores antigos
+        // Limpeza de acumuladores antigos (por data) - não afeta contagem de hoje
         cleanOldAccumulators();
 
-        // SEMPRE registrar/atualizar dispositivo com dados do heartbeat
+        // Registrar / atualizar dispositivo
         if (data.computer_name && data.computer_name !== 'undefined') {
             await dao.registerDevice({
                 computer_id: data.computer_id,
@@ -797,21 +797,31 @@ async function handleHeartbeat(data) {
                 user_name: data.user_name,
                 os_info: data.os_info
             });
-            console.log(`📝 Dispositivo atualizado: ${data.computer_name}`);
         }
 
-        // SERVIDOR CONTROLA O TEMPO - processar heartbeat para incrementar minutos
+        // Incremento agregado legado (mantém daily_history funcional)
         await processHeartbeat(data.computer_id, {
             current_activity: data.current_activity,
             active_window: data.active_window,
             timestamp: data.timestamp
         });
 
-        // Atualizar cache para dashboard em tempo real COM DADOS CORRETOS
-        let computer = computers.get(data.computer_id);
+        // Registro minuto a minuto (fonte canônica persistente)
+        try {
+            if (dao.saveMinuteTracking) {
+                await dao.saveMinuteTracking(
+                    data.computer_id,
+                    data.computer_name || 'Computador Desconhecido',
+                    data.user_name || 'Usuário Desconhecido'
+                );
+            }
+        } catch (e) {
+            console.error('❌ Erro ao salvar minuto (minute_tracking):', e.message);
+        }
 
-        // Se não existe no cache OU se dados estão vazios, criar/atualizar
-        if (!computer || !computer.computer_name || computer.computer_name === 'Computador Desconhecido') {
+        // Atualizar/instanciar cache do dispositivo
+        let computer = computers.get(data.computer_id);
+        if (!computer) {
             computer = {
                 id: data.computer_id,
                 computer_name: data.computer_name || 'Computador Desconhecido',
@@ -823,41 +833,47 @@ async function handleHeartbeat(data) {
             };
         }
 
-        // Sempre atualizar atividade atual e status
+        // Atualizar dados dinâmicos
         computer.current_activity = data.current_activity || 'Ativo';
         computer.active_window = data.active_window;
         computer.last_seen = new Date();
         computer.status = 'online';
 
-        // Atualizar dados do dispositivo se vieram no heartbeat
+        // Atualizar nomes se vieram
         if (data.computer_name && data.computer_name !== 'undefined') {
             computer.computer_name = data.computer_name;
             computer.user_name = data.user_name || computer.user_name;
             computer.os_info = data.os_info || computer.os_info;
         }
 
-        // Obter tempo acumulado pelo servidor (CARREGANDO DO BANCO SE NECESSÁRIO)
-        const today = new Date().toISOString().split('T')[0];
-        const accumulator = await getDailyAccumulator(data.computer_id, today);
-        computer.total_time = accumulator.minutes;
+        // Obter minutos do dia a partir do minute_tracking
+        try {
+            if (dao.getDeviceTodayHours) {
+                const minuteStats = await dao.getDeviceTodayHours(data.computer_id);
+                computer.total_time = minuteStats.total_minutes;
+            }
+        } catch (err) {
+            // Fallback: usar acumulador agregado
+            const today = new Date().toISOString().split('T')[0];
+            const accumulator = await getDailyAccumulator(data.computer_id, today);
+            computer.total_time = accumulator.minutes;
+        }
 
         computers.set(data.computer_id, computer);
 
-        // Manter atividades recentes
+        // Manter histórico curto de atividades
         let computerActivities = activities.get(data.computer_id) || [];
         computerActivities.push({
             timestamp: new Date(),
             activity: data.current_activity || 'Ativo',
             window: data.active_window
         });
-
         if (computerActivities.length > 20) {
             computerActivities.splice(0, computerActivities.length - 20);
         }
         activities.set(data.computer_id, computerActivities);
 
-        console.log(`✅ ${computer.computer_name}: ${accumulator.minutes}min acumulados (Servidor controla tempo)`);
-
+        console.log(`✅ ${computer.computer_name}: ${computer.total_time}min (unificado minute_tracking)`);
     } catch (error) {
         console.error('❌ Erro no heartbeat:', error);
     }
@@ -911,6 +927,12 @@ module.exports = async function handler(req, res) {
             // Calcular estatísticas
             const onlineDevices = allDevices.filter(device => device.is_online);
             const stats = await dao.getSystemStats();
+            // Substituir total_hours por soma real dos minutos em minute_tracking (mais preciso)
+            let unifiedMinutes = 0;
+            if (dao.getSystemMinuteTrackingSum) {
+                unifiedMinutes = await dao.getSystemMinuteTrackingSum();
+            }
+            const unifiedHours = Math.round((unifiedMinutes / 60) * 100) / 100;
 
             return res.status(200).json({
                 success: true,
@@ -919,7 +941,8 @@ module.exports = async function handler(req, res) {
                     total_computers: stats.total_devices,
                     online_computers: stats.online_devices,
                     offline_computers: stats.offline_devices,
-                    total_hours: stats.today_hours
+                    total_hours: unifiedHours,
+                    total_minutes_unified: unifiedMinutes
                 },
                 activities: Object.fromEntries(activities),
                 timestamp: new Date().toISOString(),

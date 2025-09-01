@@ -7,7 +7,7 @@ const dao = require('../database/dao');
 const DAO = dao; // Alias para compatibilidade
 
 // Inicializar tabelas na primeira execução
-(async () => {
+(async() => {
     try {
         await DAO.createDailyHistoryTable();
         await DAO.createMinuteTrackingTable();
@@ -66,7 +66,7 @@ async function updateDeviceStatus(deviceId, deviceName, userName) {
         if (timeSinceLastSeen >= 50000 && timeSinceLastSeen <= 180000) {
             try {
                 await DAO.saveMinuteTracking(deviceId, deviceName, userName);
-                
+
                 // Atualizar cache local
                 const currentMinutes = dailyTimeCache.get(deviceId) || 0;
                 const newMinutes = currentMinutes + 1;
