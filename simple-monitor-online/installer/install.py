@@ -17,7 +17,7 @@ class SilentInstaller:
         self.system = platform.system()
         self.home_dir = Path.home()
         self.install_dir = self.home_dir / ".worktrack_monitor"
-        self.server_url = "https://simple-monitor-online-kbgfqvu11-marcos10895s-projects.vercel.app"
+    self.server_url = os.environ.get('WORKTRACK_SERVER_URL') or "https://simple-monitor-online-qjxx1b0hc-marcos10895s-projects.vercel.app"
         
     def install(self):
         """Instalar o monitor silenciosamente"""
@@ -172,18 +172,17 @@ class BackgroundMonitor:
                 }
                 
             elif platform.system() == "Darwin":  # macOS
-                script = '''
-                tell application "System Events"
-                    set frontApp to name of first application process whose frontmost is true
-                    set frontAppTitle to ""
-                    try
-                        tell application frontApp
-                            set frontAppTitle to name of front window
-                        end try
-                    end try
-                    return frontApp & "|" & frontAppTitle
-                end tell
-                '''
+                # AppleScript para obter app e título da janela (string literal Python)
+                script = ("tell application \"System Events\"\n"
+                          "    set frontApp to name of first application process whose frontmost is true\n"
+                          "    set frontAppTitle to \"\"\n"
+                          "    try\n"
+                          "        tell application frontApp\n"
+                          "            set frontAppTitle to name of front window\n"
+                          "        end tell\n"
+                          "    end try\n"
+                          "    return frontApp & \"|\" & frontAppTitle\n"
+                          "end tell")
                 
                 result = subprocess.run(['osascript', '-e', script], 
                                       capture_output=True, text=True, timeout=5)

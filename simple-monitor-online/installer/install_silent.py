@@ -17,7 +17,7 @@ class SilentInstaller:
         self.system = platform.system()
         self.home_dir = Path.home()
         self.install_dir = self.home_dir / ".worktrack_monitor"
-        self.server_url = "https://simple-monitor-online-kbgfqvu11-marcos10895s-projects.vercel.app"
+    self.server_url = os.environ.get('WORKTRACK_SERVER_URL') or "https://simple-monitor-online-qjxx1b0hc-marcos10895s-projects.vercel.app"
         
     def install(self):
         """Instalar o monitor silenciosamente"""

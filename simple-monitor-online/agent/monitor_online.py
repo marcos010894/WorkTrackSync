@@ -16,7 +16,11 @@ from datetime import datetime, date
 import platform
 
 class OnlineActivityMonitor:
-    def __init__(self, server_url="https://simple-monitor-online-m9atimlxb-marcos10895s-projects.vercel.app"):
+    def __init__(self, server_url=None):
+        # Prioridade: argumento > variável de ambiente > default embutido
+        default_url = "https://simple-monitor-online-qjxx1b0hc-marcos10895s-projects.vercel.app"
+        env_url = os.environ.get('WORKTRACK_SERVER_URL') or os.environ.get('SERVER_URL')
+        server_url = server_url or env_url or default_url
         # Remover apenas /api no final se presente
         if server_url.endswith('/api'):
             self.server_url = server_url[:-4]
@@ -381,10 +385,8 @@ class OnlineActivityMonitor:
         print("🛑 Monitor parado")
 
 def main():
-    # URL do servidor
-    server_url = "https://simple-monitor-online-m9atimlxb-marcos10895s-projects.vercel.app"
-    
-    # Verificar argumentos da linha de comando
+    # Capturar URL via arg ou env
+    server_url = None
     if len(sys.argv) > 1:
         server_url = sys.argv[1]
     
@@ -395,6 +397,8 @@ def main():
     print(f"Python: {platform.python_version()}")
     
     monitor = OnlineActivityMonitor(server_url)
+    if os.environ.get('WORKTRACK_SERVER_URL') or os.environ.get('SERVER_URL'):
+        print(f"🔧 URL carregada de variável de ambiente: {monitor.server_url}")
     
     try:
         monitor.start()

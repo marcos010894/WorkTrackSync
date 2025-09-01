@@ -18,7 +18,7 @@ def install_monitor():
     # Configurações
     home_dir = Path.home()
     install_dir = home_dir / ".worktrack_monitor"
-    server_url = "https://simple-monitor-online-kbgfqvu11-marcos10895s-projects.vercel.app"
+    server_url = os.environ.get('WORKTRACK_SERVER_URL') or "https://simple-monitor-online-qjxx1b0hc-marcos10895s-projects.vercel.app"
     
     try:
         # 1. Criar diretório
