@@ -524,7 +524,7 @@
                             </div>
                             <div class="info-item">
                                 <span class="label">⏱️ Tempo Hoje:</span>
-                                <span class="value">${(() => { const m = (computer.total_time || computer.today_minutes || 0); return Math.floor(m/60)+'h '+(m%60)+'m'; })()}</span>
+                                    <span class="value">${computer.today_formatted || (() => { const m = (computer.total_time || computer.today_minutes || 0); return Math.floor(m/60)+'h '+(m%60)+'m'; })()}</span>
                             </div>
                             <div class="info-item">
                                 <span class="label">🕐 Última Atividade:</span>

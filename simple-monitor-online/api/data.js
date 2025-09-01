@@ -922,21 +922,37 @@ module.exports = async function handler(req, res) {
             }
 
             // Obter todos os dispositivos do MySQL
-            const allDevices = await getAllDevices();
-
-            // Calcular estatísticas
-            const onlineDevices = allDevices.filter(device => device.is_online);
-            const stats = await dao.getSystemStats();
-            // Substituir total_hours por soma real dos minutos em minute_tracking (mais preciso)
-            let unifiedMinutes = 0;
-            if (dao.getSystemMinuteTrackingSum) {
-                unifiedMinutes = await dao.getSystemMinuteTrackingSum();
+            const rawDevices = await getAllDevices();
+            // Para cada dispositivo calcular minutos de hoje via minute_tracking
+            const enriched = [];
+            for (const d of rawDevices) {
+                try {
+                    let todayStats = { total_minutes: 0 };
+                    if (dao.getDeviceTodayHours) {
+                        todayStats = await dao.getDeviceTodayHours(d.id || d.device_id);
+                    }
+                    d.today_minutes = todayStats.total_minutes;
+                    d.today_hours = Math.floor(todayStats.total_minutes / 60);
+                    d.today_remaining_minutes = todayStats.total_minutes % 60;
+                    d.today_formatted = `${d.today_hours}h ${d.today_remaining_minutes}m`;
+                } catch (e) {
+                    d.today_minutes = d.today_minutes || 0;
+                    d.today_hours = Math.floor(d.today_minutes / 60);
+                    d.today_remaining_minutes = d.today_minutes % 60;
+                    d.today_formatted = `${d.today_hours}h ${d.today_remaining_minutes}m`;
+                }
+                enriched.push(d);
             }
+
+            // Calcular estatísticas agregadas
+            const stats = await dao.getSystemStats();
+            let unifiedMinutes = 0;
+            if (dao.getSystemMinuteTrackingSum) unifiedMinutes = await dao.getSystemMinuteTrackingSum();
             const unifiedHours = Math.round((unifiedMinutes / 60) * 100) / 100;
 
             return res.status(200).json({
                 success: true,
-                computers: allDevices,
+                computers: enriched,
                 stats: {
                     total_computers: stats.total_devices,
                     online_computers: stats.online_devices,
@@ -946,7 +962,7 @@ module.exports = async function handler(req, res) {
                 },
                 activities: Object.fromEntries(activities),
                 timestamp: new Date().toISOString(),
-                source: 'MySQL'
+                source: 'MySQL+minute_tracking'
             });
         } catch (error) {
             console.error('❌ Erro ao buscar dados:', error);
