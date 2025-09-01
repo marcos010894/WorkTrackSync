@@ -1,12 +1,23 @@
 /**
  * WebSocket API para tempo real
- * Apenas status online/offline dos dispositivos
+ * Status online/offline + controle de tempo diário
  */
 
 const dao = require('../database/dao');
+const DAO = dao; // Alias para compatibilidade
 
 // Cache simples para dispositivos online
-let onlineDevices = new Map(); // device_id -> { name, last_seen, status }
+let onlineDevices = new Map(); // device_id -> { name, last_seen, status, session_start, today_minutes }
+
+// Cache para tempo diário acumulado
+let dailyTimeCache = new Map(); // device_id -> total_minutes
+
+// Função para formatar minutos em formato HH:MM
+function formatMinutesToTime(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+}
 
 // Função para verificar se dispositivo está online (últimos 90 segundos)
 function isDeviceOnline(lastSeen) {
@@ -16,58 +27,119 @@ function isDeviceOnline(lastSeen) {
     return diff < 90000; // 90 segundos (1.5 minutos)
 }
 
-// Função para atualizar status de um dispositivo
-function updateDeviceStatus(deviceId, deviceName, userName) {
+// Função para atualizar status de um dispositivo COM CONTROLE DE TEMPO
+async function updateDeviceStatus(deviceId, deviceName, userName) {
     const now = new Date();
+    const today = now.toISOString().split('T')[0];
     
+    // Obter dispositivo existente
+    const existingDevice = onlineDevices.get(deviceId);
+    
+    // Carregar tempo do dia se não estiver no cache
+    if (!dailyTimeCache.has(deviceId)) {
+        try {
+            const todayMinutes = await DAO.getDeviceTodayMinutes(deviceId);
+            dailyTimeCache.set(deviceId, todayMinutes);
+            console.log(`📊 Tempo carregado: ${deviceName} = ${todayMinutes}min hoje`);
+        } catch (error) {
+            console.log(`🆕 Novo dia para ${deviceName} - iniciando em 0min`);
+            dailyTimeCache.set(deviceId, 0);
+        }
+    }
+    
+    // Calcular incremento de tempo (se dispositivo estava online)
+    if (existingDevice) {
+        const timeSinceLastSeen = now - new Date(existingDevice.last_seen);
+        
+        // Se última atividade foi entre 50s e 180s, adicionar 1 minuto
+        if (timeSinceLastSeen >= 50000 && timeSinceLastSeen <= 180000) {
+            const currentMinutes = dailyTimeCache.get(deviceId) || 0;
+            const newMinutes = currentMinutes + 1;
+            dailyTimeCache.set(deviceId, newMinutes);
+            
+            console.log(`⏱️ +1min para ${deviceName}: ${currentMinutes} → ${newMinutes}min`);
+            
+            // Salvar no banco a cada 5 minutos de acúmulo
+            if (newMinutes % 5 === 0) {
+                try {
+                    await DAO.addIncrementalTime(deviceId, deviceName, userName, 5);
+                    console.log(`💾 Salvos 5min no banco para ${deviceName} (total: ${newMinutes}min)`);
+                } catch (error) {
+                    console.error(`❌ Erro ao salvar tempo para ${deviceName}:`, error);
+                }
+            }
+        }
+    }
+    
+    // Atualizar dispositivo no cache
     onlineDevices.set(deviceId, {
-        id: deviceId,
-        name: deviceName || 'Computador Desconhecido',
-        user: userName || 'Usuário Desconhecido',
-        last_seen: now,
-        status: 'online',
-        last_heartbeat: now.toISOString()
+        device_id: deviceId,
+        computer_name: deviceName,
+        user_name: userName,
+        last_seen: now.toISOString()
     });
     
-    console.log(`📱 ${deviceName} está ONLINE`);
+    console.log(`🔄 Device atualizado: ${deviceName} às ${now.toLocaleTimeString()}`);
 }
 
-// Função para obter todos os dispositivos com status
-function getAllDevicesStatus() {
+// Função para verificar se dispositivo está online (últimos 90 segundos)
+function isDeviceOnline(lastSeen) {
+    if (!lastSeen) return false;
     const now = new Date();
+    const diff = now - new Date(lastSeen);
+    return diff < 90000; // 90 segundos (1.5 minutos)
+}
+
+// Função para obter todos os dispositivos com status E TEMPO
+async function getAllDevicesStatus() {
     const devices = [];
-    
-    onlineDevices.forEach((device, deviceId) => {
-        const isOnline = isDeviceOnline(device.last_seen);
-        
+    const now = new Date();
+
+    for (const [deviceId, device] of onlineDevices) {
+        const timeDiff = now - new Date(device.last_seen);
+        const isOnline = timeDiff <= 90000; // 90 segundos
+
+        // Buscar ou carregar tempo do dia do cache
+        let dailyMinutes = dailyTimeCache.get(deviceId) || 0;
+        if (dailyMinutes === 0) {
+            try {
+                dailyMinutes = await DAO.getDeviceTodayMinutes(deviceId);
+                dailyTimeCache.set(deviceId, dailyMinutes);
+            } catch (error) {
+                console.error(`❌ Erro ao carregar tempo do dia para ${deviceId}:`, error);
+            }
+        }
+
         devices.push({
-            id: deviceId,
-            name: device.name,
-            user: device.user,
-            status: isOnline ? 'online' : 'offline',
+            device_id: deviceId,
+            computer_name: device.computer_name,
+            user_name: device.user_name,
             last_seen: device.last_seen,
-            last_heartbeat: device.last_heartbeat
+            status: isOnline ? 'online' : 'offline',
+            time_diff_seconds: Math.floor(timeDiff / 1000),
+            daily_minutes: dailyMinutes,
+            daily_time_formatted: formatMinutesToTime(dailyMinutes)
         });
-    });
-    
-    return devices;
+    }
+
+    return devices.sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
 }
 
 // Limpeza periódica de dispositivos offline
 setInterval(() => {
     const now = new Date();
     let cleaned = 0;
-    
+
     onlineDevices.forEach((device, deviceId) => {
         const timeDiff = now - new Date(device.last_seen);
-        
+
         // Remove dispositivos offline há mais de 2 minutos (quase instantâneo)
         if (timeDiff > 120000) { // 2 minutos
             onlineDevices.delete(deviceId);
             cleaned++;
         }
     });
-    
+
     if (cleaned > 0) {
         console.log(`🧹 ${cleaned} dispositivos offline removidos do cache`);
     }
@@ -85,8 +157,8 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'GET') {
         try {
-            const devices = getAllDevicesStatus();
-            
+            const devices = await getAllDevicesStatus();
+
             return res.status(200).json({
                 success: true,
                 devices: devices,
@@ -109,8 +181,8 @@ module.exports = async function handler(req, res) {
             const data = req.body;
 
             if (data.type === 'heartbeat') {
-                // Atualizar status do dispositivo
-                updateDeviceStatus(
+                // Atualizar status do dispositivo com tempo
+                await updateDeviceStatus(
                     data.computer_id,
                     data.computer_name,
                     data.user_name
