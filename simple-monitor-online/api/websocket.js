@@ -31,10 +31,10 @@ function isDeviceOnline(lastSeen) {
 async function updateDeviceStatus(deviceId, deviceName, userName) {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    
+
     // Obter dispositivo existente
     const existingDevice = onlineDevices.get(deviceId);
-    
+
     // Carregar tempo do dia se não estiver no cache
     if (!dailyTimeCache.has(deviceId)) {
         try {
@@ -46,19 +46,19 @@ async function updateDeviceStatus(deviceId, deviceName, userName) {
             dailyTimeCache.set(deviceId, 0);
         }
     }
-    
+
     // Calcular incremento de tempo (se dispositivo estava online)
     if (existingDevice) {
         const timeSinceLastSeen = now - new Date(existingDevice.last_seen);
-        
+
         // Se última atividade foi entre 50s e 180s, adicionar 1 minuto
         if (timeSinceLastSeen >= 50000 && timeSinceLastSeen <= 180000) {
             const currentMinutes = dailyTimeCache.get(deviceId) || 0;
             const newMinutes = currentMinutes + 1;
             dailyTimeCache.set(deviceId, newMinutes);
-            
+
             console.log(`⏱️ +1min para ${deviceName}: ${currentMinutes} → ${newMinutes}min`);
-            
+
             // Salvar no banco a cada 5 minutos de acúmulo
             if (newMinutes % 5 === 0) {
                 try {
@@ -70,7 +70,7 @@ async function updateDeviceStatus(deviceId, deviceName, userName) {
             }
         }
     }
-    
+
     // Atualizar dispositivo no cache
     onlineDevices.set(deviceId, {
         device_id: deviceId,
@@ -78,7 +78,7 @@ async function updateDeviceStatus(deviceId, deviceName, userName) {
         user_name: userName,
         last_seen: now.toISOString()
     });
-    
+
     console.log(`🔄 Device atualizado: ${deviceName} às ${now.toLocaleTimeString()}`);
 }
 
