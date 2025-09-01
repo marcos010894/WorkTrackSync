@@ -276,9 +276,11 @@
             document.getElementById('onlineDevices').textContent = data.online_devices || 0;
             document.getElementById('offlineDevices').textContent = data.offline_devices || 0;
 
-            // Calcular tempo total
+            // Calcular tempo total em formato horas
             const totalMinutes = data.devices.reduce((sum, device) => sum + (device.daily_minutes || 0), 0);
-            document.getElementById('totalTime').textContent = formatMinutes(totalMinutes);
+            const totalHours = Math.floor(totalMinutes / 60);
+            const remainingMins = totalMinutes % 60;
+            document.getElementById('totalTime').textContent = `${totalHours}h ${remainingMins}m`;
 
             // Limpar container
             container.innerHTML = '';
@@ -319,7 +321,7 @@
                     </div>
 
                     <div class="time-display">
-                        <div class="time-value">${device.daily_time_formatted || formatMinutes(device.daily_minutes || 0)}</div>
+                        <div class="time-value">${device.daily_time_formatted || '0h 0m'}</div>
                         <div class="time-label">Tempo Online Hoje</div>
                     </div>
                     

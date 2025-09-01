@@ -187,6 +187,9 @@ async function initializeDatabase() {
 
             // Criar tabela de histórico diário
             await dao.createDailyHistoryTable();
+            
+            // Criar nova tabela de tracking de minutos
+            await dao.createMinuteTrackingTable();
 
             // Atualizar status dos dispositivos na inicialização
             await dao.updateDevicesStatus();

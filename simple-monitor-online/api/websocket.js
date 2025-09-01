@@ -6,6 +6,17 @@
 const dao = require('../database/dao');
 const DAO = dao; // Alias para compatibilidade
 
+// Inicializar tabelas na primeira execução
+(async () => {
+    try {
+        await DAO.createDailyHistoryTable();
+        await DAO.createMinuteTrackingTable();
+        console.log('✅ Tabelas WebSocket inicializadas');
+    } catch (error) {
+        console.error('❌ Erro na inicialização WebSocket:', error);
+    }
+})();
+
 // Cache simples para dispositivos online
 let onlineDevices = new Map(); // device_id -> { name, last_seen, status, session_start, today_minutes }
 
@@ -35,39 +46,47 @@ async function updateDeviceStatus(deviceId, deviceName, userName) {
     // Obter dispositivo existente
     const existingDevice = onlineDevices.get(deviceId);
 
-    // Carregar tempo do dia se não estiver no cache
+    // Carregar horas do dia se não estiver no cache
     if (!dailyTimeCache.has(deviceId)) {
         try {
-            const todayMinutes = await DAO.getDeviceTodayMinutes(deviceId);
-            dailyTimeCache.set(deviceId, todayMinutes);
-            console.log(`📊 Tempo carregado: ${deviceName} = ${todayMinutes}min hoje`);
+            const todayHours = await DAO.getDeviceTodayHours(deviceId);
+            dailyTimeCache.set(deviceId, todayHours.total_minutes);
+            console.log(`📊 Tempo carregado: ${deviceName} = ${todayHours.formatted_time} hoje`);
         } catch (error) {
-            console.log(`🆕 Novo dia para ${deviceName} - iniciando em 0min`);
+            console.log(`🆕 Novo dia para ${deviceName} - iniciando em 0h 0m`);
             dailyTimeCache.set(deviceId, 0);
         }
     }
 
-    // Calcular incremento de tempo (se dispositivo estava online)
+    // Salvar minuto de atividade (sempre que receber heartbeat)
     if (existingDevice) {
         const timeSinceLastSeen = now - new Date(existingDevice.last_seen);
 
-        // Se última atividade foi entre 50s e 180s, adicionar 1 minuto
+        // Se última atividade foi entre 50s e 180s, salvar 1 minuto
         if (timeSinceLastSeen >= 50000 && timeSinceLastSeen <= 180000) {
-            const currentMinutes = dailyTimeCache.get(deviceId) || 0;
-            const newMinutes = currentMinutes + 1;
-            dailyTimeCache.set(deviceId, newMinutes);
+            try {
+                await DAO.saveMinuteTracking(deviceId, deviceName, userName);
+                
+                // Atualizar cache local
+                const currentMinutes = dailyTimeCache.get(deviceId) || 0;
+                const newMinutes = currentMinutes + 1;
+                dailyTimeCache.set(deviceId, newMinutes);
 
-            console.log(`⏱️ +1min para ${deviceName}: ${currentMinutes} → ${newMinutes}min`);
-
-            // Salvar no banco a cada 5 minutos de acúmulo
-            if (newMinutes % 5 === 0) {
-                try {
-                    await DAO.addIncrementalTime(deviceId, deviceName, userName, 5);
-                    console.log(`💾 Salvos 5min no banco para ${deviceName} (total: ${newMinutes}min)`);
-                } catch (error) {
-                    console.error(`❌ Erro ao salvar tempo para ${deviceName}:`, error);
-                }
+                const hours = Math.floor(newMinutes / 60);
+                const mins = newMinutes % 60;
+                console.log(`⏰ +1min salvo: ${deviceName} = ${hours}h ${mins}m total hoje`);
+            } catch (error) {
+                console.error(`❌ Erro ao salvar minuto para ${deviceName}:`, error);
             }
+        }
+    } else {
+        // Primeiro heartbeat do dia, salvar minuto inicial
+        try {
+            await DAO.saveMinuteTracking(deviceId, deviceName, userName);
+            dailyTimeCache.set(deviceId, 1);
+            console.log(`🆕 Primeiro minuto salvo: ${deviceName}`);
+        } catch (error) {
+            console.error(`❌ Erro ao salvar primeiro minuto para ${deviceName}:`, error);
         }
     }
 
@@ -99,15 +118,13 @@ async function getAllDevicesStatus() {
         const timeDiff = now - new Date(device.last_seen);
         const isOnline = timeDiff <= 90000; // 90 segundos
 
-        // Buscar ou carregar tempo do dia do cache
-        let dailyMinutes = dailyTimeCache.get(deviceId) || 0;
-        if (dailyMinutes === 0) {
-            try {
-                dailyMinutes = await DAO.getDeviceTodayMinutes(deviceId);
-                dailyTimeCache.set(deviceId, dailyMinutes);
-            } catch (error) {
-                console.error(`❌ Erro ao carregar tempo do dia para ${deviceId}:`, error);
-            }
+        // Buscar horas do dia do banco
+        let timeData = { total_minutes: 0, formatted_time: '0h 0m' };
+        try {
+            timeData = await DAO.getDeviceTodayHours(deviceId);
+            dailyTimeCache.set(deviceId, timeData.total_minutes);
+        } catch (error) {
+            console.error(`❌ Erro ao carregar horas do dia para ${deviceId}:`, error);
         }
 
         devices.push({
@@ -117,8 +134,10 @@ async function getAllDevicesStatus() {
             last_seen: device.last_seen,
             status: isOnline ? 'online' : 'offline',
             time_diff_seconds: Math.floor(timeDiff / 1000),
-            daily_minutes: dailyMinutes,
-            daily_time_formatted: formatMinutesToTime(dailyMinutes)
+            daily_minutes: timeData.total_minutes,
+            daily_hours: timeData.total_hours,
+            remaining_minutes: timeData.remaining_minutes,
+            daily_time_formatted: timeData.formatted_time
         });
     }
 

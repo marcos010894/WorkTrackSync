@@ -34,6 +34,33 @@ async function createDailyHistoryTable() {
     }
 }
 
+// Criar tabela de tracking de minutos detalhado
+async function createMinuteTrackingTable() {
+    const query = `
+        CREATE TABLE IF NOT EXISTS minute_tracking (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            device_id VARCHAR(100) NOT NULL,
+            device_name VARCHAR(255),
+            user_name VARCHAR(255),
+            tracked_date DATE NOT NULL,
+            tracked_minute DATETIME NOT NULL,
+            activity_type VARCHAR(50) DEFAULT 'online',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_device_date (device_id, tracked_date),
+            INDEX idx_tracked_minute (tracked_minute),
+            FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `;
+
+    try {
+        await db.executeQuery(query);
+        console.log('✅ Tabela minute_tracking criada/verificada');
+    } catch (error) {
+        console.error('❌ Erro ao criar tabela minute_tracking:', error);
+        throw error;
+    }
+}
+
 /**
  * DISPOSITIVOS
  */
@@ -548,9 +575,118 @@ async function getAllDevicesHistory(limit = 100) {
     }
 }
 
+/**
+ * TRACKING DE MINUTOS DETALHADO
+ */
+
+// Salvar um minuto individual de atividade
+async function saveMinuteTracking(deviceId, deviceName, userName) {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    const query = `
+        INSERT INTO minute_tracking (device_id, device_name, user_name, tracked_date, tracked_minute, activity_type)
+        VALUES (?, ?, ?, ?, ?, 'online')
+    `;
+
+    try {
+        await db.executeQuery(query, [deviceId, deviceName, userName, today, now]);
+        console.log(`⏰ Minuto salvo: ${deviceName} às ${now.toLocaleTimeString()}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao salvar minuto:', error);
+        return false;
+    }
+}
+
+// Buscar total de horas do dia para um dispositivo
+async function getDeviceTodayHours(deviceId, date = null) {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    
+    const query = `
+        SELECT COUNT(*) as total_minutes
+        FROM minute_tracking 
+        WHERE device_id = ? AND tracked_date = ?
+    `;
+
+    try {
+        const result = await db.executeQuery(query, [deviceId, targetDate]);
+        const totalMinutes = result[0]?.total_minutes || 0;
+        return {
+            total_minutes: totalMinutes,
+            total_hours: Math.floor(totalMinutes / 60),
+            remaining_minutes: totalMinutes % 60,
+            formatted_time: `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`
+        };
+    } catch (error) {
+        console.error('❌ Erro ao buscar horas do dia:', error);
+        return {
+            total_minutes: 0,
+            total_hours: 0,
+            remaining_minutes: 0,
+            formatted_time: '0h 0m'
+        };
+    }
+}
+
+// Buscar estatísticas de todos os dispositivos para hoje
+async function getAllDevicesTodayStats(date = null) {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    
+    const query = `
+        SELECT 
+            device_id,
+            device_name,
+            user_name,
+            COUNT(*) as total_minutes,
+            MIN(tracked_minute) as first_activity,
+            MAX(tracked_minute) as last_activity
+        FROM minute_tracking 
+        WHERE tracked_date = ?
+        GROUP BY device_id, device_name, user_name
+        ORDER BY total_minutes DESC
+    `;
+
+    try {
+        const results = await db.executeQuery(query, [targetDate]);
+        return results.map(row => ({
+            device_id: row.device_id,
+            device_name: row.device_name,
+            user_name: row.user_name,
+            total_minutes: row.total_minutes,
+            total_hours: Math.floor(row.total_minutes / 60),
+            remaining_minutes: row.total_minutes % 60,
+            formatted_time: `${Math.floor(row.total_minutes / 60)}h ${row.total_minutes % 60}m`,
+            first_activity: row.first_activity,
+            last_activity: row.last_activity
+        }));
+    } catch (error) {
+        console.error('❌ Erro ao buscar estatísticas do dia:', error);
+        return [];
+    }
+}
+
+// Limpar dados antigos (manter apenas últimos 30 dias)
+async function cleanOldMinuteTracking() {
+    const query = `
+        DELETE FROM minute_tracking 
+        WHERE tracked_date < DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+    `;
+
+    try {
+        const result = await db.executeQuery(query);
+        console.log(`🧹 ${result.affectedRows} registros antigos removidos do tracking`);
+        return result.affectedRows;
+    } catch (error) {
+        console.error('❌ Erro ao limpar dados antigos:', error);
+        return 0;
+    }
+}
+
 module.exports = {
     // Inicialização
     createDailyHistoryTable,
+    createMinuteTrackingTable,
 
     // Dispositivos
     registerDevice,
@@ -581,5 +717,11 @@ module.exports = {
 
     // Manutenção
     cleanOldData,
-    cleanTestDevices
+    cleanTestDevices,
+
+    // Tracking de Minutos
+    saveMinuteTracking,
+    getDeviceTodayHours,
+    getAllDevicesTodayStats,
+    cleanOldMinuteTracking
 };
