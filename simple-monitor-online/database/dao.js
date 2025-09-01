@@ -82,7 +82,10 @@ async function registerDevice(deviceData) {
         VALUES (?, ?, ?, ?, NOW(), NOW(), 1, TRUE)
         ON DUPLICATE KEY UPDATE
             name = VALUES(name),
-            user_name = VALUES(user_name),
+            user_name = CASE 
+                WHEN VALUES(user_name) IS NULL OR VALUES(user_name) = '' 
+                     OR VALUES(user_name) IN ('Usuário Desconhecido','Usuario-Desconhecido') THEN user_name
+                ELSE VALUES(user_name) END,
             os_info = VALUES(os_info),
             last_seen = NOW(),
             total_sessions = total_sessions + 1,
@@ -165,13 +168,20 @@ async function resetDeviceDailyTime(deviceId) {
 async function updateDeviceInfo(deviceId, deviceInfo) {
     const query = `
         UPDATE devices 
-        SET name = ?, user_name = ?, os_info = ?, last_seen = NOW()
+        SET 
+            name = ?,
+            user_name = CASE 
+                WHEN ? IS NULL OR ? = '' OR ? IN ('Usuário Desconhecido','Usuario-Desconhecido') THEN user_name
+                ELSE ? END,
+            os_info = ?,
+            last_seen = NOW()
         WHERE id = ?
     `;
 
+    const cleanUser = deviceInfo.user_name || null;
     const params = [
         deviceInfo.name || 'Computador Desconhecido',
-        deviceInfo.user_name || 'Usuário Desconhecido',
+        cleanUser, cleanUser, cleanUser, cleanUser,
         deviceInfo.os_info || 'Sistema Desconhecido',
         deviceId
     ];

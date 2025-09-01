@@ -102,13 +102,33 @@ class OnlineActivityMonitor:
             if custom_user and custom_user.strip():
                 print(f"👤 Usando usuário personalizado: {custom_user}")
                 return custom_user.strip()
-        
-        # Usar nome padrão do sistema
+        # Persistir usuário detectado inicialmente para evitar cair em "Usuario-Desconhecido" depois
         try:
+            store_path = os.path.join(os.path.expanduser('~'), '.worktrack_monitor_user')
+            env_user = None
             if platform.system() == "Windows":
-                return os.environ.get('USERNAME', 'Usuario-Desconhecido')
+                env_user = os.environ.get('USERNAME')
             else:
-                return os.environ.get('USER', 'Usuario-Desconhecido')
+                env_user = os.environ.get('USER')
+            if env_user and env_user.strip():
+                # Salvar se diferente
+                try:
+                    if not os.path.exists(store_path):
+                        with open(store_path, 'w', encoding='utf-8') as f:
+                            f.write(env_user.strip())
+                    else:
+                        # Se já existe e diferente, manter o original (não sobrescreve com vazio)
+                        pass
+                except:
+                    pass
+                return env_user.strip()
+            # Fallback: carregar armazenado
+            if os.path.exists(store_path):
+                with open(store_path, 'r', encoding='utf-8') as f:
+                    saved = f.read().strip()
+                    if saved:
+                        return saved
+            return 'Usuario-Desconhecido'
         except:
             return 'Usuario-Desconhecido'
 
